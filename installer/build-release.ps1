@@ -106,6 +106,18 @@ if (Test-Path $nmSrc) {
   throw "node_modules missing after install"
 }
 
+if (-not $SkipBuild) {
+  Write-Step "Restoring devDependencies in repo (release build stripped them)"
+  Push-Location $RepoRoot
+  try {
+    npm install
+    if ($LASTEXITCODE -ne 0) { throw "npm install (restore) failed" }
+  } finally {
+    Pop-Location
+  }
+  Write-Ok "Repo node_modules restored"
+}
+
 Set-Content (Join-Path $Payload "version.txt") $Version -Encoding ASCII
 if (Test-Path (Join-Path $InstallerDir "finish-guide.txt")) {
   Copy-Item (Join-Path $InstallerDir "finish-guide.txt") (Join-Path $Payload "HOW-TO-USE.txt") -Force

@@ -4,6 +4,9 @@
 
 **Developer:** [CaYaDev](https://cayadev.com)
 
+> [!IMPORTANT]
+> **インストール方法:** **[Releases](https://github.com/CaYatur/PremiereProMCP/releases)** を開き、`PPMCP-Setup-x.x.x.zip` をダウンロードして展開し、**`Setup.bat`** をダブルクリックしてください。このファイル1つでインストールがすべて完了します。
+
 メイン: **[English README](./README.md)**
 
 ---
