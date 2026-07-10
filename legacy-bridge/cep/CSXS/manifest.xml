@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  PPMCP optional ExtendScript text bridge (CEP panel).
+  Not required for core UXP editing — only for real MOGRT text write.
+  Install: see legacy-bridge/README.md and install-dev.ps1
+-->
+<ExtensionManifest Version="11.0" ExtensionBundleId="com.ppmcp.legacybridge"
+                   ExtensionBundleVersion="0.1.0"
+                   ExtensionBundleName="PPMCP Text Bridge"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <ExtensionList>
+    <Extension Id="com.ppmcp.legacybridge.panel" Version="0.1.0"/>
+  </ExtensionList>
+  <ExecutionEnvironment>
+    <HostList>
+      <!-- Premiere Pro major versions commonly still hosting CEP -->
+      <Host Name="PPRO" Version="[14.0,99.9]"/>
+    </HostList>
+    <LocaleList>
+      <Locale Code="All"/>
+    </LocaleList>
+    <RequiredRuntimeList>
+      <RequiredRuntime Name="CSXS" Version="11.0"/>
+    </RequiredRuntimeList>
+  </ExecutionEnvironment>
+  <DispatchInfoList>
+    <Extension Id="com.ppmcp.legacybridge.panel">
+      <DispatchInfo>
+        <Resources>
+          <MainPath>./client/index.html</MainPath>
+          <ScriptPath>./jsx/host.jsx</ScriptPath>
+          <CEFCommandLine>
+            <Parameter>--enable-nodejs</Parameter>
+            <Parameter>--mixed-context</Parameter>
+          </CEFCommandLine>
+        </Resources>
+        <Lifecycle>
+          <AutoVisible>true</AutoVisible>
+        </Lifecycle>
+        <UI>
+          <Type>Panel</Type>
+          <Menu>PPMCP Text Bridge</Menu>
+          <Geometry>
+            <Size>
+              <Height>220</Height>
+              <Width>320</Width>
+            </Size>
+            <MinSize>
+              <Height>160</Height>
+              <Width>240</Width>
+            </MinSize>
+          </Geometry>
+        </UI>
+      </DispatchInfo>
+    </Extension>
+  </DispatchInfoList>
+</ExtensionManifest>

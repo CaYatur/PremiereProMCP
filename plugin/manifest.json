@@ -1,0 +1,27 @@
+{
+  "id": "com.ppmcp.plugin",
+  "name": "Premiere Pro MCP",
+  "version": "0.1.0",
+  "main": "index.html",
+  "manifestVersion": 5,
+  "host": [
+    { "app": "premierepro", "minVersion": "26.0.0" }
+  ],
+  "entryPoints": [
+    {
+      "type": "panel",
+      "id": "ppmcp.panel",
+      "label": { "default": "PPMCP" },
+      "minimumSize": { "width": 240, "height": 120 },
+      "maximumSize": { "width": 800, "height": 1200 },
+      "preferredDockedSize": { "width": 300, "height": 160 }
+    }
+  ],
+  "requiredPermissions": {
+    "clipboard": "readAndWrite",
+    "network": {
+      "domains": "all"
+    },
+    "localFileSystem": "fullAccess"
+  }
+}

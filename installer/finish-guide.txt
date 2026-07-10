@@ -1,0 +1,18 @@
+Premiere Pro MCP was installed.
+
+A personalized guide with the FULL paths for THIS computer is written to:
+
+  %APPDATA%\PPMCP\HOW-TO-USE.txt
+  %APPDATA%\PPMCP\HOW-TO-CONNECT.txt
+  %APPDATA%\PPMCP\mcp-config-snippet.json
+
+Those files are filled in automatically after setup (no "YOU" placeholders).
+
+You need Adobe UXP Developer Tool (free) to load the Premiere panel:
+
+  https://developer.adobe.com/premiere-pro/uxp/
+  https://adobe.com/go/uxp_developer_tool
+
+Search: "Adobe UXP Developer Tool download" if a link changes.
+
+Developer: CaYaDev · https://cayadev.com

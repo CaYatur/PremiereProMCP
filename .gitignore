@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+
+# Installer payload & release binaries
+installer/payload/
+dist-release/
+
+# Build outputs (regenerated via npm run build)
+bridge/dist/
+server/dist/
+shared/dist/
+
+# Logs & caches
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Local / secrets
+.env
+.env.*
+*.local
+
+# Temp / QA artifacts
+tmp-qa/
+*.tmp
+.cache/
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS
+Desktop.ini
+
+# Local checkpoints / session junk (user home, not repo)
+# (checkpoints live under ~/.ppmcp — not in this tree)
+
+# Media dumps if placed under repo by mistake
+editsource/
+*.prproj
+*.prproj.lock

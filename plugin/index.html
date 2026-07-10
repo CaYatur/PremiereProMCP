@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        font-family: "Segoe UI", system-ui, sans-serif;
+        font-size: 12px;
+        margin: 0;
+        padding: 12px 12px 28px;
+        color: #e8e8e8;
+        background: #2b2b2b;
+        display: flex;
+        flex-direction: column;
+      }
+      h1 {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0 0 10px;
+        letter-spacing: 0.02em;
+        color: #fff;
+      }
+      #status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        padding: 8px 10px;
+        background: #1f1f1f;
+        border-radius: 6px;
+        border: 1px solid #3a3a3a;
+      }
+      .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #c44;
+        flex-shrink: 0;
+        box-shadow: 0 0 0 2px rgba(204, 68, 68, 0.25);
+      }
+      .dot.connected {
+        background: #3c9;
+        box-shadow: 0 0 0 2px rgba(51, 204, 153, 0.3);
+      }
+      #statusText {
+        font-weight: 600;
+        font-size: 12px;
+      }
+      #statusText.active {
+        color: #6f6;
+      }
+      #hint {
+        font-size: 10px;
+        opacity: 0.65;
+        line-height: 1.4;
+        margin-bottom: 8px;
+      }
+      #log {
+        white-space: pre-wrap;
+        font-family: ui-monospace, Consolas, monospace;
+        font-size: 10px;
+        opacity: 0.75;
+        max-height: 90px;
+        overflow-y: auto;
+        flex: 1;
+        background: #1a1a1a;
+        border-radius: 4px;
+        padding: 6px 8px;
+        border: 1px solid #333;
+      }
+      #footer {
+        position: fixed;
+        right: 10px;
+        bottom: 6px;
+        left: 10px;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 6px;
+        font-size: 10px;
+        color: #888;
+        pointer-events: none;
+      }
+      #footer a {
+        color: #8ab4ff;
+        text-decoration: none;
+        pointer-events: auto;
+      }
+      #footer a:hover {
+        text-decoration: underline;
+        color: #b0ccff;
+      }
+      #footer .sep {
+        opacity: 0.4;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Premiere Pro MCP</h1>
+    <div id="status">
+      <span class="dot" id="dot"></span>
+      <span id="statusText">Connecting…</span>
+    </div>
+    <div id="hint">Keep the bridge running (<code>npm run dev:bridge</code>). MCP clients talk to the server; this panel links Premiere to the relay.</div>
+    <div id="log"></div>
+    <div id="footer">
+      <span>Developer:</span>
+      <strong style="color: #bbb">CaYaDev</strong>
+      <span class="sep">·</span>
+      <a href="https://cayadev.com" id="siteLink">cayadev.com</a>
+    </div>
+    <script src="./src/index.js"></script>
+  </body>
+</html>

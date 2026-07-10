@@ -1,0 +1,32 @@
+Premiere Pro MCP (PPMCP) — Setup
+Developer: CaYaDev · https://cayadev.com
+
+BEFORE YOU CONTINUE
+-------------------
+• Close Adobe Premiere Pro if it is open.
+• You need a normal Windows user account.
+
+WHAT THIS SETUP CAN DO
+----------------------
+• Fresh install (first time)
+• Update / reinstall if PPMCP is already on this PC
+• Uninstall completely (Setup detects the old version and offers Remove)
+
+IF ALREADY INSTALLED
+--------------------
+The next page may ask:
+  1) Update to this Setup's version
+  2) Uninstall completely
+  3) Cancel
+
+WHAT GETS INSTALLED
+-------------------
+1. PPMCP into the folder you choose (default: Local AppData\PPMCP)
+2. Portable Node.js (no separate Node install)
+3. Bridge (relay) + optional start with Windows
+4. Optional CEP panel for editable titles
+5. Real full paths written into HOW-TO-USE.txt for Claude / Cursor / Claude Code
+6. UXP Developer Tool download links (required to load the Premiere panel)
+
+Re-open the guide anytime:
+  %APPDATA%\PPMCP\HOW-TO-USE.txt
