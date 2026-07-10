@@ -17,5 +17,7 @@ if (Test-Path $uxp) {
   cmd /c rmdir "$uxp" 2>$null
   if (Test-Path $uxp) { Remove-Item $uxp -Recurse -Force -ErrorAction SilentlyContinue }
 }
+$cep = Join-Path $AppData "Adobe\CEP\extensions\com.ppmcp.legacybridge"
+Remove-Item $cep -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host "Done. Remove MCP server entry from Claude/Cursor config manually." -ForegroundColor Green
 Write-Host "Developer: CaYaDev | https://cayadev.com"

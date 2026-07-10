@@ -23,5 +23,8 @@ if (Test-Path $uxp) {
   Remove-Item $uxp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+$cep = Join-Path $AppData "Adobe\CEP\extensions\com.ppmcp.legacybridge"
+Remove-Item $cep -Recurse -Force -ErrorAction SilentlyContinue
+
 Write-Host "PPMCP helper files removed. Remove MCP entry from Claude/Cursor config manually if needed."
 Write-Host "CaYaDev | https://cayadev.com"
