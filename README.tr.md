@@ -51,6 +51,35 @@ Ayrinti: **[INSTALL.md](./INSTALL.md)**
 
 ---
 
+## MCP istemcini bagla
+
+PPMCP **lokal (yerel) bir stdio MCP sunucusu** — kendi PC'nde calisan bir Node islemi, AI istemcinle dogrudan konusur. **Uzak (remote) bir MCP baglayici degildir** — yani Claude'un Connectors ekranindaki *"Add custom connector" → Remote MCP server URL* akisi burada gecerli degil. Setup sonrasi tam yollarin zaten `HOW-TO-CONNECT.txt` / `mcp-config-snippet.json` icinde hazir.
+
+**Claude Desktop** — Setup bunu `claude_desktop_config.json`'a otomatik ekler. Elle yapmak icin `"mcpServers"` objesine ekle:
+
+```json
+{
+  "mcpServers": {
+    "premiere-pro": {
+      "command": "C:\\Users\\SEN\\AppData\\Local\\PPMCP\\node\\node.exe",
+      "args": ["C:\\Users\\SEN\\AppData\\Local\\PPMCP\\server\\dist\\index.js"]
+    }
+  }
+}
+```
+
+**Claude Code** (CLI):
+
+```bash
+claude mcp add premiere-pro -- "C:\Users\SEN\AppData\Local\PPMCP\node\node.exe" "C:\Users\SEN\AppData\Local\PPMCP\server\dist\index.js"
+```
+
+**Cursor** — Settings → MCP → Add server (bu bir *lokal komut*, URL degil):
+- Command: yukaridaki Node yolu
+- Args: yukaridaki server yolu
+
+---
+
 ## Bu nedir?
 
 PPMCP, AI ajanini **calisan Premiere Pro**'ya baglayan bir MCP sunucusudur: sekans, kesim, yazi, sekil, ses, grade, export.

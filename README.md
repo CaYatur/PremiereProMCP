@@ -72,6 +72,39 @@ Details: **[INSTALL.md](./INSTALL.md)**.
 
 ---
 
+## Connect your MCP client
+
+PPMCP is a **local stdio MCP server** — a Node process on your own PC that your AI client talks to directly. It is **not** a hosted "remote MCP connector", so the *"Add custom connector" → Remote MCP server URL* flow you may see in Claude's Connectors settings does not apply here. Point your client at a local command instead.
+
+After running Setup, your exact ready-to-paste paths are already generated in `%APPDATA%\PPMCP\HOW-TO-CONNECT.txt` and `mcp-config-snippet.json`. General form:
+
+**Claude Desktop** — Setup writes this into `claude_desktop_config.json` for you automatically. To do it by hand, merge this into the `"mcpServers"` object:
+
+```json
+{
+  "mcpServers": {
+    "premiere-pro": {
+      "command": "C:\\Users\\You\\AppData\\Local\\PPMCP\\node\\node.exe",
+      "args": ["C:\\Users\\You\\AppData\\Local\\PPMCP\\server\\dist\\index.js"]
+    }
+  }
+}
+```
+
+**Claude Code** (CLI):
+
+```bash
+claude mcp add premiere-pro -- "C:\Users\You\AppData\Local\PPMCP\node\node.exe" "C:\Users\You\AppData\Local\PPMCP\server\dist\index.js"
+```
+
+**Cursor** — Settings → MCP → Add server (a *local command*, not a URL):
+- Command: the Node path above
+- Args: the server path above
+
+Building from source instead of the Setup ZIP? Use `node` on your PATH and `server/dist/index.js` from the repo.
+
+---
+
 ## What is this?
 
 PPMCP is a **Model Context Protocol** server that connects an AI agent to a **live Adobe Premiere Pro** session. The model can:

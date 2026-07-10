@@ -83,8 +83,34 @@ Without this app, a beginner cannot load the PPMCP panel into Premiere.
 4. **Load** → open **PPMCP** panel → **Active**.  
 5. Footer: **CaYaDev · cayadev.com**
 
-### 3–5. Claude Desktop / Claude Code / Cursor
-Follow the exact commands and paths in `HOW-TO-USE.txt` / `mcp-config-snippet.json` on your machine (they are already filled in).
+### 3–5. Connect an MCP client
+
+PPMCP is a **local stdio MCP server** — a Node process on your own PC that your AI client talks to directly, not a hosted "remote MCP connector". Your exact ready-to-paste paths are already in `HOW-TO-CONNECT.txt` / `mcp-config-snippet.json`. General form:
+
+**Claude Desktop** — Setup already adds this to `claude_desktop_config.json` for you. To do it by hand, merge into the `"mcpServers"` object:
+
+```json
+{
+  "mcpServers": {
+    "premiere-pro": {
+      "command": "C:\\Users\\You\\AppData\\Local\\PPMCP\\node\\node.exe",
+      "args": ["C:\\Users\\You\\AppData\\Local\\PPMCP\\server\\dist\\index.js"]
+    }
+  }
+}
+```
+
+**Claude Code** (CLI):
+
+```bash
+claude mcp add premiere-pro -- "C:\Users\You\AppData\Local\PPMCP\node\node.exe" "C:\Users\You\AppData\Local\PPMCP\server\dist\index.js"
+```
+
+**Cursor** — Settings → MCP → Add server (a *local command*, not a URL):
+- Command: the Node path above
+- Args: the server path above
+
+> Claude's **Settings → Connectors → Add custom connector** dialog asks for a *Remote MCP server URL* — that's for hosted/remote MCP servers and does not apply to PPMCP. Use the client's local `mcpServers` config (or `claude mcp add`) instead.
 
 ### 6. Optional CEP (if checked in the wizard)
 Restart Premiere → **Window → PPMCP Text Bridge**.
@@ -140,8 +166,8 @@ powershell -ExecutionPolicy Bypass -File installer\build-release.ps1
 Output:
 
 ```text
-dist-release\PPMCP-Setup-0.2.0.zip
-dist-release\PPMCP-Setup-0.2.0\   (extracted layout for testing)
+dist-release\PPMCP-Setup-x.x.x.zip
+dist-release\PPMCP-Setup-x.x.x\   (extracted layout for testing)
 ```
 
 Upload the **ZIP** to **GitHub → Releases**.

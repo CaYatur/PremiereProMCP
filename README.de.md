@@ -42,4 +42,31 @@ cd PremiereProMCP
 npm install && npm run build && npm run dev:bridge
 ```
 
+## MCP-Client verbinden
+
+PPMCP ist ein **lokaler stdio-MCP-Server** — ein Node-Prozess auf Ihrem eigenen PC, mit dem Ihr KI-Client direkt spricht. Es ist **kein** gehosteter "Remote-MCP-Connector" — der Ablauf *"Add custom connector" → Remote MCP server URL* in Claudes Connectors-Einstellungen gilt hier nicht. Nach dem Setup stehen Ihre genauen Pfade bereits in `HOW-TO-CONNECT.txt` / `mcp-config-snippet.json`.
+
+**Claude Desktop** — Setup tragt dies automatisch in `claude_desktop_config.json` ein. Manuell: in das `"mcpServers"`-Objekt einfugen:
+
+```json
+{
+  "mcpServers": {
+    "premiere-pro": {
+      "command": "C:\\Users\\Sie\\AppData\\Local\\PPMCP\\node\\node.exe",
+      "args": ["C:\\Users\\Sie\\AppData\\Local\\PPMCP\\server\\dist\\index.js"]
+    }
+  }
+}
+```
+
+**Claude Code** (CLI):
+
+```bash
+claude mcp add premiere-pro -- "C:\Users\Sie\AppData\Local\PPMCP\node\node.exe" "C:\Users\Sie\AppData\Local\PPMCP\server\dist\index.js"
+```
+
+**Cursor** — Settings → MCP → Add server (ein *lokaler Befehl*, keine URL):
+- Command: der Node-Pfad oben
+- Args: der Server-Pfad oben
+
 Details: **[INSTALL.md](./INSTALL.md)** · Features im English README.

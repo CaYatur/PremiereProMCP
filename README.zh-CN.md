@@ -42,4 +42,31 @@ cd PremiereProMCP
 npm install && npm run build && npm run dev:bridge
 ```
 
+## 连接你的 MCP 客户端
+
+PPMCP 是一个**本地 stdio MCP 服务器**——一个运行在你自己电脑上的 Node 进程，AI 客户端直接与它通信。它**不是**托管的"远程 MCP 连接器"，所以 Claude 的 Connectors 设置里 *"Add custom connector" → Remote MCP server URL* 那个流程在这里不适用。Setup 完成后，你的确切路径已经写在 `HOW-TO-CONNECT.txt` / `mcp-config-snippet.json` 里了。
+
+**Claude Desktop** —— Setup 会自动写入 `claude_desktop_config.json`。手动添加时，合并到 `"mcpServers"` 对象里：
+
+```json
+{
+  "mcpServers": {
+    "premiere-pro": {
+      "command": "C:\\Users\\你\\AppData\\Local\\PPMCP\\node\\node.exe",
+      "args": ["C:\\Users\\你\\AppData\\Local\\PPMCP\\server\\dist\\index.js"]
+    }
+  }
+}
+```
+
+**Claude Code**（命令行）：
+
+```bash
+claude mcp add premiere-pro -- "C:\Users\你\AppData\Local\PPMCP\node\node.exe" "C:\Users\你\AppData\Local\PPMCP\server\dist\index.js"
+```
+
+**Cursor** —— Settings → MCP → Add server（这是*本地命令*，不是 URL）：
+- Command：上面的 Node 路径
+- Args：上面的 server 路径
+
 详见 **[INSTALL.md](./INSTALL.md)** 与英文 README 功能说明。
