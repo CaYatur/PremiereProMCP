@@ -178,7 +178,7 @@ Ticks: `seconds * 254016000000`.
 ### Position / size
 
 - `shape_set_position` / `effect_set_transform` → Motion **0–1**  
-- `shape_set_size` px (yoksa Scale %)
+- `shape_set_size` — gercek Size property yok, her zaman tek yonlu Scale % yaklasikligi kullanir (bagimsiz W×H degil)
 
 ---
 

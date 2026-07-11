@@ -69,4 +69,8 @@ claude mcp add premiere-pro -- "C:\Users\あなた\AppData\Local\PPMCP\node\node
 - Command: 上記の Node のパス
 - Args: 上記の server のパス
 
+## ツールの状態
+
+約225個の MCP ツール。ほとんどは type-verified（Adobe API の実メソッドに対応するが、まだ実機で全て検証済みではない）。実際のワークアラウンドがある既知の問題が4つ: `clip_insert`、`marker_add`、`text_set_content`（既存テキストの編集）、`shape_set_size`。詳細と代替手段は **[English README](./README.md#tool-status-whats-actually-tested)** または [docs/FEATURES.md](./docs/FEATURES.md) を参照。
+
 詳細は **[INSTALL.md](./INSTALL.md)** と English README。

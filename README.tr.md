@@ -98,6 +98,25 @@ PPMCP, AI ajanini **calisan Premiere Pro**'ya baglayan bir MCP sunucusudur: seka
 
 ---
 
+## Arac durumu: gercekte test edilen neler
+
+**~225 MCP arac**, 17 kategoride (project, sequence, track, clip, transition, effect, color/Lumetri, audio, text/title/shape, marker/metadata, multicam, proxy/media, export, analysis, batch, selection/system, arti ~15 ust-seviye workflow arac). Bu araclarin cogu Adobe'nin kendi `@adobe/premierepro` UXP API'sindeki gercek, dokumante edilmis bir metoda karsilik geliyor ve calismasi beklenir, ama hepsi tek tek canli bir Premiere oturumunda test edilmedi henuz — detayli arac-bazli dogrulama seviyesi icin [docs/FEATURES.md](./docs/FEATURES.md)'e bak.
+
+**Gercek testte iyi calisan:** cekirdek kurgu yolu (`clip_overwrite`, trim, roll/slip/slide, split, ripple delete), sequence/track yonetimi, sekil ekleme + konum + dolgu rengi, `text_write`'in PNG fallback yolu, effect/transition/marker listeleme, medya import. Coklu adimli duzenlemeler (roll/slip/slide ve birlesik workflow araclari) Premiere'in `Project.executeTransaction()` mekanizmasi uzerinden tek atomik islem olarak commit ediliyor — yani islem yarida kesilirse timeline yarim-duzenlenmis halde kalmiyor. Bu transaction tasarimi eklentinin en guvenilir parcasi oldu.
+
+**Su anda bilinen sorunlar, her biri icin gercek bir alternatifle** (dorde de bu Premiere surumunun scripting API'sindeki spesifik bosluklar, belirsiz "calismayabilir" degil):
+
+| Arac | Sorun | Bunun yerine |
+|------|-------|--------------|
+| `clip_insert` | Bu Premiere surumunde basarisiz oluyor (`SequenceEditor` insert action reddediliyor); senin sequence'ina eklemek yerine medyadan **yeni bir sequence** olusturuyor | Var olan sequence'a eklemek icin `clip_overwrite` |
+| `marker_add` | Native marker olusturma basarisiz oluyor; Sequence Properties'e yazilan bir "virtual marker"a duruyor — `marker_list`/`marker_go_to` okuyabiliyor ama Premiere'in kendi marker track'inde **gorunmuyor** | Su an icin bilinen bir sinirlama — gorsel bir Premiere marker'i gerekiyorsa kendi takibini yap |
+| `text_set_content` (var olan yaziyi duzenleme) | Sadece istege bagli CEP Text Bridge baglıyken, After Effects ile hazirlanmis bir MOGRT uzerinde guvenilir. CEP yoksa, pure-UXP yolu Premiere tarafindan reddediliyor (MOGRT `Text` property'sinde `Illegal Parameter type`) | Yeni yazi koymak icin `text_write` / `text_add` — CEP olmasa bile PNG fallback ile her zaman basariyla sonuclanir |
+| `shape_set_size` | Hazir sekil sablonunda gercek bir piksel-boyut ozelligi hic disari acilmadi; her zaman tek yonlu Motion Scale % ile yaklasik boyut veriyor, bagimsiz genislik/yukseklik degil | "Buyut/kucult" icin sorun degil; tam piksel boyutu icin guvenme |
+
+Dort dursuz bosluk oldugu gibi listelenir, sessizce calisiyormus gibi gosterilmez. Bu tablo, altta yatan Premiere/UXP API degistikce guncellenir.
+
+---
+
 ## Lisans
 
 MIT · **CaYaDev** · [cayadev.com](https://cayadev.com)

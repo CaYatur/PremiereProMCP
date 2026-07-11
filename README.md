@@ -192,6 +192,25 @@ Rough cuts · cinematic SFX · music-rhythm cuts · ad-style motion cards · QA 
 
 ---
 
+## Tool status: what's actually tested
+
+**~225 MCP tools** across 17 categories (project, sequence, track, clip, transitions, effects, color/Lumetri, audio, text/titles/shapes, markers/metadata, multicam, proxy/media, export, analysis, batch, selection/system, plus ~15 high-level workflow tools). Most of that surface maps to a real, documented method in Adobe's own `@adobe/premierepro` UXP API and is expected to work, but hasn't all been individually exercised against a live Premiere session yet — see [docs/FEATURES.md](./docs/FEATURES.md) for the full tool-by-tool verification tier (type-verified / live-verified / verified-composed / known-broken).
+
+**What holds up well under real testing:** the core edit path (`clip_overwrite`, trim, roll/slip/slide, split, ripple delete), sequence/track management, shape add + position + fill color, `text_write`'s PNG fallback path, listing effects/transitions/markers, and media import. Multi-step edits (roll/slip/slide and composite workflow tools) are committed through Premiere's `Project.executeTransaction()` — several primitive actions run as one atomic unit, so a failure partway through doesn't leave the timeline half-edited. That transaction design has been the most reliable part of the whole plugin.
+
+**Known issues right now, with a real workaround for each** (all four are specific gaps in this Premiere build's scripting API, not vague "might not work"):
+
+| Tool | Issue | Use instead |
+|------|-------|--------------|
+| `clip_insert` | Fails on this Premiere build (`SequenceEditor` insert action rejected); falls back to creating a *new* sequence from the media rather than inserting into yours | `clip_overwrite` on an existing sequence |
+| `marker_add` | Native marker creation fails; falls back to a "virtual marker" stored in Sequence Properties — readable by `marker_list`/`marker_go_to`, but does **not** show up in Premiere's own marker track | Known limitation for now — track marker intent yourself if you need a visible Premiere marker |
+| `text_set_content` (edit *existing* text) | Only reliable with the optional CEP Text Bridge connected, on an After-Effects-authored MOGRT. Without CEP, the pure-UXP path is rejected by Premiere (`Illegal Parameter type` on the MOGRT `Text` property) | `text_write` / `text_add` for placing new text — it always succeeds via a guaranteed PNG fallback, even without CEP |
+| `shape_set_size` | The bundled shape template never exposed a real pixel-size property; always approximates size via a single uniform Motion Scale %, not independent width/height | Fine for "bigger/smaller"; don't rely on it for exact pixel dimensions |
+
+We'd rather list four honest gaps than quietly ship them as working. This table gets updated as the underlying Premiere/UXP API changes.
+
+---
+
 ## Architecture
 
 | Path | Role |

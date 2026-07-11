@@ -69,4 +69,8 @@ claude mcp add premiere-pro -- "C:\Users\你\AppData\Local\PPMCP\node\node.exe" 
 - Command：上面的 Node 路径
 - Args：上面的 server 路径
 
+## 工具状态
+
+约 225 个 MCP 工具；大多数是 type-verified（对应 Adobe API 里真实存在的方法，但还没有全部做过实机测试）。目前有 4 个已知问题、且都有实际可用的替代方案：`clip_insert`、`marker_add`、`text_set_content`（编辑已有文字）、`shape_set_size`。详细表格和替代方案见 **[English README](./README.md#tool-status-whats-actually-tested)** 或 [docs/FEATURES.md](./docs/FEATURES.md)。
+
 详见 **[INSTALL.md](./INSTALL.md)** 与英文 README 功能说明。

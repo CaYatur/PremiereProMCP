@@ -1,60 +1,80 @@
 # Feature / Tool List
 
-> **⚠ IMPLEMENTATION STATUS (updated 2026-07-10, expansion pass + live smoke):
-> ~199 MCP tools are registered in code (server `allTools`). The full chain
-> MCP client → server → relay → UXP plugin → Premiere has been exercised
-> live for the edit core, P/L/K/N/O categories, and effect-add (after fixing
-> `VideoFilterFactory.createComponent` → `createAppendComponentAction`).
-> Plugin must be **reloaded in UXP Developer Tool** after handler changes
-> before new relay methods appear. Tools without a real UXP primitive
-> (multicam create/sync, STT captions, silence/scene DSP, workspace APIs)
-> remain intentionally unimplemented rather than faked.**
+> **⚠ IMPLEMENTATION STATUS (updated 2026-07-11, post-install real-app
+> testing pass):** ~225 MCP tools are implemented in code (server
+> `allTools`, `server/src/tools/index.ts`). Most of the catalog below is
+> **type-verified** — it maps to a real, documented method in
+> `@adobe/premierepro`'s type declarations and is very likely to work, but
+> has not been individually runtime-exercised yet. A smaller set has been
+> **live-verified** (✅) or **verified-composed** (⚠, built from confirmed
+> primitives inside one `Project.executeTransaction()` — see below). Treat
+> "no tag" as "should work," not "proven," until it's been called against a
+> real Premiere session.
 >
-> **Confirmed working live:** plugin connect/reconnect, reading the active
-> project and its sequences, creating a sequence, listing tracks, adding a
-> shape graphic and setting its position and fill color (a real on-screen
-> edit, round-tripped through `PointF`/`Color` class instances), listing
-> markers, enumerating real available effects/transitions (`AE.ADBE
-> Lumetri`, 100+ real transition matchNames), and **importing a real video
-> file into the project** (`project_import_media`, confirmed after fixing a
-> real bug — `ProjectItem`'s id is the `getId()` *method*, not a `.nodeId`
-> property the type declarations never actually named that way).
+> **The atomic-transaction design works well.** Multi-step edits (roll,
+> slip, slide, and any workflow tool composed from several primitive
+> `Action`s) are wrapped in `Project.executeTransaction()` inside
+> `Project.lockedAccess()` — see `runTransaction()` in
+> `plugin/src/ppro.js`. This is the part of the design that has held up
+> best under real testing: composed edits commit as one atomic unit or not
+> at all, so a failure partway through doesn't leave the timeline in a
+> half-edited state.
 >
-> **Four specific, well-understood gaps, not vague uncertainty:**
-> 1. `text_set_content` — Premiere's `createKeyframe()` rejects even a
->    valid string for the MOGRT `"Text"` master property with `"Illegal
->    Parameter type"`, contradicting its own published type declarations;
->    an isolated diagnostic probe (`plugin/src/handlers/debug.js`)
->    confirmed this isn't our bug — `getStartValue()`/`getKeyframePtr()`
->    both return `null` for this param, unlike the sibling `Position`
->    param on the same clip, which works fine.
-> 2. `shape_set_size` — the AE-template-authoring step never successfully
->    exposed a `Size` master property (a known gap from Phase 0).
-> 3. `clip_insert` and 4. `marker_add` — both fail with the identical
->    generic `"Script action failed to execute"`, thrown *synchronously by
->    `CompoundAction#addAction()` itself* (confirmed via added
->    instrumentation in `plugin/src/ppro.js#runTransaction` — its type
->    declaration claims it returns a boolean, but it throws instead here).
->    Both come from a "collection-level" factory
->    (`SequenceEditor.createInsertProjectItemAction` /
->    `Markers.createAddMarkerAction`) rather than a `TrackItem`/
->    `ComponentParam` directly — every action sourced the latter way
->    (trim/roll/slip/slide, shape position/color) works. **Ruled out across
->    a third round:** the action object itself is non-null (an explicit
->    guard confirmed this), and neither `limitShift` (tried both `true`/
->    `false`) nor the marker duration value (tried a small nonzero tick
->    count and `ppro.TickTime.TIME_ZERO`) changes the outcome — same
->    generic error every time. This is now a confirmed platform-level gap
->    in this specific mechanism for this Premiere build, not an unfound
->    parameter. Revisit if a future Premiere/`@adobe/premierepro` release
->    changes this, or if a different construction path for these two
->    actions surfaces.
+> **Four specific, confirmed issues from real-app testing — not vague
+> uncertainty, and each has a concrete fallback or workaround today:**
+> 1. **`text_set_content`** (edit text on an *existing* graphic) — only
+>    reliable when the optional **CEP Text Bridge** is installed and
+>    connected *and* the graphic is an After-Effects-authored MOGRT capsule.
+>    Without CEP, it falls through to a pure-UXP path that Premiere itself
+>    rejects: `ComponentParam.createKeyframe()` throws `"Illegal Parameter
+>    type"` for the MOGRT `"Text"` master property, contradicting its own
+>    published type declarations (confirmed with an isolated diagnostic
+>    probe, `plugin/src/handlers/debug.js` — `getStartValue()`/
+>    `getKeyframePtr()` both return `null` for this param, unlike the
+>    sibling `Position` param on the same clip, which works fine). **If you
+>    just need text on screen (not re-editing existing text), use
+>    `text_write`/`text_add` instead** — it's a resilient multi-path tool
+>    (UXP → CEP → PNG) with a guaranteed final PNG fallback, so it always
+>    produces visible text even with no CEP bridge running.
+> 2. **`shape_set_size`** — the bundled shape MOGRT never exposed a real
+>    `Size` master property (an authoring-time gap, not a UXP bug), so this
+>    tool *always* falls back to approximating size via a single uniform
+>    Motion **Scale %** (averaged from the requested width/height against a
+>    400×200 design size) rather than setting exact independent pixel
+>    dimensions. Fine for "make it bigger/smaller," not for an exact W×H.
+> 3. **`clip_insert`** — `SequenceEditor.createInsertProjectItemAction()`
+>    fails with a generic `"Script action failed to execute"` on this
+>    Premiere build. The tool catches this and **creates a brand-new
+>    sequence containing just that clip** instead of inserting into the
+>    sequence/track/time you asked for (open it with `sequence_set_active`).
+>    **If you want the clip on an existing sequence, use `clip_overwrite`**
+>    (confirmed working) instead of `clip_insert`.
+> 4. **`marker_add`** — `Markers.createAddMarkerAction()` fails with the
+>    same generic error on this build. The tool falls back to a **"virtual
+>    marker"** written into Sequence Properties (`plugin/src/handlers/
+>    virtualMarkers.js`) so `marker_list`/`marker_go_to` still work — but
+>    it is **not a real Premiere timeline marker**; it won't show up in
+>    Premiere's own marker UI/track.
+>
+>    Both #3 and #4 throw the identical generic error from
+>    `CompoundAction#addAction()` itself, confirmed via instrumentation in
+>    `plugin/src/ppro.js#runTransaction` — every action sourced from a
+>    `TrackItem`/`ComponentParam` directly (trim/roll/slip/slide, shape
+>    position/color) works; only actions sourced from a "collection-level"
+>    factory (`SequenceEditor`/`Markers`) hit this. Revisit if a future
+>    Premiere/`@adobe/premierepro` release changes this.
+>
+> **Everything else exercised in this testing pass** — connect/reconnect,
+> reading project/sequence state, creating sequences, listing tracks,
+> `clip_overwrite`/trim/roll/slip/slide, shape add + position + fill color,
+> `text_write`'s PNG path, listing markers/effects/transitions, and
+> `project_import_media` — worked as documented.
 >
 > See `docs/ARCHITECTURE.md` §2.4 for the Text gap's full detail. The
 > remaining categories below (multicam, proxy/media, analysis, batch, most
 > of markers/metadata, the dedicated-shortcut catalog, and the 12
-> high-level workflow tools) are still spec-only. No installer/packaging
-> and no GitHub publish yet.
+> high-level workflow tools) are lower-confidence / spec-level and have not
+> had a dedicated real-app pass yet.
 
 Status: **Draft target list for v1 — honestly tiered by verification
 level.** Desk research read Adobe's official `@adobe/premierepro` v26.3.0
@@ -272,7 +292,7 @@ by this probe.**
 `track_get_items`
 
 ### D. Clip / TrackItem Editing — `clip_*` (33) — the "edit quality" core
-`clip_insert`, `clip_overwrite`, `clip_append`, `clip_ripple_delete`,
+`clip_insert` ❔ (confirmed broken on this Premiere build — falls back to creating a new sequence from the media instead of inserting; use `clip_overwrite`), `clip_overwrite` ✅, `clip_append`, `clip_ripple_delete`,
 `clip_lift`, `clip_extract`, `clip_trim_in`, `clip_trim_out`,
 `clip_roll_edit` ⚠, `clip_slip` ⚠, `clip_slide` ⚠, `clip_move`,
 `clip_duplicate`, `clip_split`, `clip_split_at_playhead`, `clip_delete`,
@@ -338,7 +358,7 @@ a one-call "normalize to target LUFS" action does not.
 `audio_solo_track`, `audio_apply_essential_sound_preset` ❔,
 `audio_get_waveform_data` ❔, `audio_pan_set`, `audio_get_levels`
 
-### I. Titles, Graphics & Captions — `title_*`, `caption_*`, `shape_*` (19)
+### I. Titles, Graphics & Captions — `text_*`, `title_*`, `caption_*`, `shape_*` (19)
 **Updated 2026-07-10 — text editing is now FULLY live-confirmed
 end-to-end, with a critical caveat about which MOGRT you use.** Five live
 test rounds (`spike/extendscript-test/test.jsx`, run against real Premiere
@@ -397,17 +417,41 @@ mute only is confirmed; **the live probe confirmed
 runtime** — the documented Transcript API is not reliable as-is and needs
 its own targeted runtime testing (the MOGRT ExtendScript workaround does
 **not** apply here — captions aren't MOGRT graphics).
-`title_create_text` 🧩✅ (full read→edit→write→re-read round-trip live-confirmed, font/size/style preserved — requires our own bundled AE-authored template, not Adobe's), `title_edit_text` 🧩✅ (same technique, same confirmation), `title_set_style` 🧩✅ (font/size/bold/italic/allCaps fields confirmed present and preserved in the same JSON blob as text — same technique, same confirmation),
-`title_apply_mogrt` ✅ (live-confirmed: both Adobe's bundled `Basic Title.mogrt` and an AE-authored MOGRT inserted successfully via UXP), `title_list_mogrt_library`,
-`title_customize_mogrt_fields` 🧩✅ (confirmed working end-to-end, but only for AE-authored MOGRTs — Adobe's own bundled non-`[AE]`-prefixed templates are confirmed BROKEN for this, do not use them for text tools), `title_create_lower_third` 🧩✅ (directly demonstrated: the AE-authored "Sports Lower Third Center" MOGRT's Title+Subtitle were both successfully edited),
-`shape_create_rectangle` 🔧 (needs one bundled template we'd author; position/scale/rotation confirmed reachable via the already-proven UXP Motion-component path; fill color should route through UXP's confirmed `Color` keyframe type, not ExtendScript — architecturally sound, not yet tested against a real shape template), `shape_create_ellipse` 🔧 (same), `shape_set_style` 🔧 (same, color path specifically untested),
+**Note: the shipped tool names differ from the planning names used in the
+narrative above** — the "`title_create_text`"-style read→edit→write→re-read
+round-trip described above shipped as the `text_write`/`text_add` resilient
+multi-path engine (UXP → CEP → PNG), not as separate `title_*` tools. Real
+tool list, real tags:
+
+`text_system_status`, `text_design_guide`, `text_auto_design`,
+`text_bridge_ensure` (checks/starts the optional CEP Text Bridge connection),
+`text_write` ⚠ (resilient multi-path: tries an AE-authored MOGRT capsule via
+UXP/CEP first, always has a PNG-render fallback so it never fails outright —
+PNG text is not re-editable afterward), `text_write_editable` (forces the
+editable-MOGRT path, no PNG fallback — fails if CEP/UXP both fail),
+`text_write_png` (skips straight to the PNG path), `text_add` (alias of
+`text_write`),
+`text_set_content` ❔ (edits an *existing* graphic's text — only reliable
+with the optional CEP Text Bridge connected to an AE-authored MOGRT; the
+pure-UXP fallback is confirmed broken — `ComponentParam.createKeyframe()`
+throws `"Illegal Parameter type"` for the MOGRT `Text` master property. Use
+`text_write` instead if you don't need to re-edit existing text),
+`text_get_content` (same CEP-first/UXP-fallback split as above, read-only),
+`text_set_content_legacy`, `text_get_content_legacy` (CEP-only, no UXP
+fallback — require the Text Bridge panel open), `text_set_position`,
+`shape_add` ✅ (live-confirmed: adds a real on-screen shape, position and
+fill color round-tripped through `PointF`/`Color`), `shape_set_position` ✅,
+`shape_set_size` ❔ (the bundled shape MOGRT never exposed a real `Size`
+master property — this tool *always* falls back to a single uniform Motion
+Scale % approximation, not independent width/height in pixels),
+`shape_set_fill_color` ✅, `title_list_params`,
 `caption_generate_auto` ❔, `caption_import_srt` ❔ (downgraded from 🔧 — depends on the now-broken `Transcript` surface), `caption_export_srt` ❔ (same),
 `caption_edit_segment_text` ❔, `caption_edit_segment_timing` ❔,
 `caption_set_style` ❔, `caption_burn_in` ❔, `caption_list_tracks`,
 `caption_create_track` ❔
 
 ### J. Markers & Metadata — `marker_*`, `metadata_*` (12)
-`marker_add`, `marker_remove`, `marker_list`, `marker_set_color`,
+`marker_add` ❔ (confirmed broken on this Premiere build — native marker creation fails, falls back to a "virtual marker" in Sequence Properties that `marker_list`/`marker_go_to` can read but does not appear in Premiere's own marker UI), `marker_remove`, `marker_list` ✅, `marker_set_color`,
 `marker_set_type`, `marker_set_duration`, `marker_go_to`,
 `metadata_get_clip`, `metadata_set_clip`, `metadata_get_xmp`,
 `metadata_set_xmp`, `metadata_batch_tag`

@@ -167,7 +167,7 @@ center every title; hand-align shape under text as plate; invent 960,480
 | Need | Tool |
 |------|------|
 | Fill color | `shape_set_fill_color` or `shape_add.fillColor` |
-| Size | `shape_set_size` (square ≈ dot) |
+| Size | `shape_set_size` (square ≈ dot) — no real Size property; always approximates via uniform Scale %, not independent W×H |
 | Position | `shape_set_position` / `effect_set_transform` 0–1 |
 | Opacity over time | `effect_set_opacity` + **`atTicks`** keyframes |
 | Text color | `text_write.colorHex` |

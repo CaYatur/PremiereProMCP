@@ -69,4 +69,8 @@ claude mcp add premiere-pro -- "C:\Users\Sie\AppData\Local\PPMCP\node\node.exe" 
 - Command: der Node-Pfad oben
 - Args: der Server-Pfad oben
 
+## Tool-Status
+
+~225 MCP-Tools; die meisten sind type-verified (bilden eine echte Adobe-API-Methode ab, aber noch nicht alle live getestet). Vier bekannte Probleme mit echtem Workaround: `clip_insert`, `marker_add`, `text_set_content` (bestehenden Text bearbeiten) und `shape_set_size` — Details und Alternativen im **[English README](./README.md#tool-status-whats-actually-tested)** oder in [docs/FEATURES.md](./docs/FEATURES.md).
+
 Details: **[INSTALL.md](./INSTALL.md)** · Features im English README.
