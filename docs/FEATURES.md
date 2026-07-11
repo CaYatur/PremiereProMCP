@@ -1,8 +1,10 @@
 # Feature / Tool List
 
 > **⚠ IMPLEMENTATION STATUS (updated 2026-07-11, post-install real-app
-> testing pass):** ~225 MCP tools are implemented in code (server
-> `allTools`, `server/src/tools/index.ts`). Most of the catalog below is
+> testing pass):** 277 MCP tools are implemented in code (server
+> `allTools`, `server/src/tools/index.ts` — counted at runtime: 225 in the
+> per-category files + 52 generated dedicated effect/audio/transition
+> shortcuts). Most of the catalog below is
 > **type-verified** — it maps to a real, documented method in
 > `@adobe/premierepro`'s type declarations and is very likely to work, but
 > has not been individually runtime-exercised yet. A smaller set has been
@@ -37,28 +39,42 @@
 > current code** — the retry hardening below can silently fix what an
 > earlier probe found broken.
 >
-> **Confirmed broken in that same real session — three of the four fixed
-> in code since, pending a live re-test:**
-> 1. **`clip_append`** — failed consistently with `"Script action failed to
->    execute"` because it used one fixed attempt instead of `clip_insert`'s
->    retry logic. **Fixed:** both now share the same ~10-variant retry via
->    one helper (`insertProjectItemWithRetry` in `plugin/src/handlers/
->    clip.js`) — anything that made `clip_insert` succeed should now make
->    `clip_append` succeed too.
-> 2. **`track_add_video` / `track_add_audio`** — fail on this Premiere
->    build (`"No UXP method to add audio track"`). **Not fixed** — no
->    plausible alternate method was found to try (unlike #3 below, there's
->    no established Action-factory pattern for this in the codebase to
->    fall back to). You're limited to whatever track count the
->    sequence/preset started with; plan track count upfront via
->    `sequence_create`/a preset.
-> 3. **`sequence_set_in_out`** — completely missing from this Premiere
->    build's UXP API (`"sequence.setInPoint is not a function"`), not a
->    partial failure. **Hardened:** now also tries the `SequenceEditor`
->    Action-factory pattern (`createSetInPointAction`/
->    `createSetOutPointAction`) every other mutation in this codebase uses,
->    feature-detected so it's a no-op if that method doesn't exist either —
->    unverified whether it actually exists on this build.
+> **Status after two real sessions (2026-07-11) — what's now confirmed,
+> fixed, or a hard platform limit:**
+> 1. **`clip_append`** — **NOW CONFIRMED WORKING in a real session.** It
+>    previously failed with `"Script action failed to execute"` (one fixed
+>    attempt instead of `clip_insert`'s retry logic); the fix made both share
+>    the same ~10-variant retry helper (`insertProjectItemWithRetry` in
+>    `plugin/src/handlers/clip.js`), and a re-test confirmed it appends clips
+>    in the correct order. Promote from "fixed, pending re-test" to ✅.
+> 2. **`track_add` / `track_add_video` / `track_add_audio`** — **CONFIRMED
+>    ADOBE PLATFORM LIMITATION, not fixable plugin-side.** Verified
+>    2026-07-11 against Adobe's official `ppro_reference`: neither the
+>    `Sequence` class nor `SequenceEditor` exposes any
+>    `addTrack`/`addVideoTrack`/`addAudioTrack`/`createAddTrackAction`. The
+>    capability is simply absent from the Premiere UXP API. The handler still
+>    feature-detects (so it starts working the day Adobe ships one) but today
+>    returns a clear error. **Workarounds:** create the sequence with enough
+>    tracks up front (`sequence_create`/a preset), or place a clip at a
+>    higher track index with `clip_overwrite`/`clip_insert` (both now work) —
+>    Premiere is expected to auto-create the intervening tracks. This also
+>    caps `sequence_create`/`sequence_create_from_media` at the preset's
+>    track count (≈3 video + 3–4 audio).
+> 3. **`sequence_set_in_out`** — **ROOT CAUSE FOUND AND FIX CORRECTED
+>    (pending live re-test).** Real testing walked it through two errors:
+>    first `"sequence.setInPoint is not a function"`, then — after the first
+>    fix attempt — `"no candidate method found… Not exposed via UXP
+>    Sequence/SequenceEditor"`. That first attempt looked for the Action
+>    factory on the **wrong object** (`SequenceEditor`). Per Adobe's official
+>    `ppro_reference`, `createSetInPointAction`/`createSetOutPointAction` are
+>    on the **`Sequence` object itself**, introduced in Premiere 25.6. The
+>    handler now calls `sequence.createSetInPointAction(t)` /
+>    `createSetOutPointAction(t)` and commits both in **one compound
+>    transaction** (no invalid in>out intermediate state), keeping the
+>    editor/direct paths as fallbacks. Since `clip_append` (a 25.6-era
+>    `createInsertProjectItemAction` path) works on this build, the build is
+>    ≥25.6, so these factories should be present — hence "should work," not
+>    just "might."
 > 4. **`media_get_info` / `media_analyze_file_info`** — never returned
 >    duration, resolution, or frame rate; `ClipProjectItem` only exposes
 >    path/proxy/offline-style fields via UXP (see `plugin/src/handlers/
@@ -302,7 +318,7 @@ catalog listed several planning-era names (`sequence_create_from_preset`,
 implemented under those names. Real list, real tags:
 `sequence_create` ✅, `sequence_get_active`, `sequence_list`,
 `sequence_set_active`, `sequence_get_settings`,
-`sequence_set_in_out` ❔ (confirmed broken in a real session — `"sequence.setInPoint is not a function"`; hardened 2026-07-11 with an additional `SequenceEditor` Action-factory fallback attempt, unverified whether it actually fixes it on this build),
+`sequence_set_in_out` ❔ (root cause found + fix corrected 2026-07-11, pending live re-test — the Action factory lives on the `Sequence` object, not `SequenceEditor`; now calls `sequence.createSetInPointAction`/`createSetOutPointAction`, Premiere 25.6+, both in one compound transaction — see status callout above),
 `sequence_delete`, `sequence_close`,
 `sequence_create_from_media` (the fallback destination when `clip_insert` truly can't insert — see §D), `sequence_get_duration`, `sequence_get_tracks`,
 `sequence_export_frame`
@@ -315,13 +331,16 @@ don't match what shipped. Real list, real tags:
 `track_list`, `track_add`, `track_delete`, `track_set_mute`,
 `track_set_lock`, `track_set_output_enabled`, `track_rename`,
 `track_get_items`,
-`track_add_video` ❔, `track_add_audio` ❔ (both confirmed broken in a real
-session — `"No UXP method to add audio track"` — you're limited to the
-track count the sequence/preset started with; no workaround to add more
-tracks after creation yet)
+`track_add` ✗, `track_add_video` ✗, `track_add_audio` ✗ (confirmed Adobe
+platform limitation, verified 2026-07-11 against the official
+`ppro_reference` — no add-track method exists on `Sequence` or
+`SequenceEditor`; not a plugin bug and not fixable plugin-side. Workaround:
+plan track count at `sequence_create`, or drop a clip at a higher track
+index via `clip_overwrite`/`clip_insert` to force-create tracks — see
+status callout above)
 
 ### D. Clip / TrackItem Editing — `clip_*` (33) — the "edit quality" core
-`clip_insert` ✅ (live-confirmed on ~19 clips in a real session via internal multi-variant retry — see status callout above; can be slow due to the retry loop), `clip_overwrite` ✅, `clip_append` (was confirmed broken — `"Script action failed to execute"` — now shares `clip_insert`'s retry logic via one helper as of 2026-07-11, pending live re-test), `clip_ripple_delete`,
+`clip_insert` ✅ (live-confirmed on ~19 clips in a real session via internal multi-variant retry — see status callout above; can be slow due to the retry loop), `clip_overwrite` ✅, `clip_append` ✅ (was broken — `"Script action failed to execute"` — now shares `clip_insert`'s retry logic via one helper; re-test 2026-07-11 confirmed it works and appends in the correct order), `clip_ripple_delete`,
 `clip_lift`, `clip_extract`, `clip_trim_in`, `clip_trim_out`,
 `clip_roll_edit` ⚠, `clip_slip` ⚠, `clip_slide` ⚠, `clip_move`,
 `clip_duplicate`, `clip_split`, `clip_split_at_playhead`, `clip_delete`,

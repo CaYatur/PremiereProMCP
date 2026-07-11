@@ -174,6 +174,22 @@ center every title; hand-align shape under text as plate; invent 960,480
 
 Match colors to picture (cool backrooms → white titles; danger → red REC).
 
+### Video effects — the WHOLE Effects panel is available
+
+You are not limited to the `effect_apply_*` shortcuts. The full Premiere Effects panel (~105 video effects) is usable:
+
+```
+// 1. Discover (video only, filtered — keeps tokens low)
+effect_list_available { kind: "video", query: "distort" }
+// 2. Apply ANY of them by its friendly displayName (no cryptic matchName needed)
+effect_add { trackIndex, clipIndex, matchName: "Lens Distortion" }
+// 3. Tune / keyframe
+effect_list_applied { trackIndex, clipIndex }
+effect_set_param { effectIndex, paramName: "Curvature", value: 30, atTicks?: "..." }
+```
+
+Prefer a dedicated `effect_apply_*` when one exists (fewer tokens); reach for `effect_list_available` + `effect_add` for anything else. Always pass `query`/`kind` — don't dump the whole catalog.
+
 ## Audio (frame-controlled)
 
 - Default gain **0 dB** if model omits `gainDb`  

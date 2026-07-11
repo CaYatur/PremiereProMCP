@@ -71,6 +71,6 @@ claude mcp add premiere-pro -- "C:\Users\あなた\AppData\Local\PPMCP\node\node
 
 ## ツールの状態
 
-約225個の MCP ツール。ほとんどは type-verified（Adobe API の実メソッドに対応するが、まだ実機で全て検証済みではない）。最近の実機テストで確認済みの問題（回避策あり）がいくつか見つかり、以前の想定も一部訂正されました。最新の詳細な表は **[English README](./README.md#tool-status-whats-actually-tested)** または [docs/FEATURES.md](./docs/FEATURES.md) を参照。
+約20カテゴリに277個の MCP ツール。`clip_append` は実機で動作確認済み、`sequence_set_in_out` は修正済み（誤ったオブジェクトを参照していた。現在は `sequence.createSetInPointAction` を呼ぶ、Premiere 25.6+）。確認済みの Adobe プラットフォーム制限: UXP API には空のトラックを追加するメソッドがない（`track_add`）— シーケンス作成時にトラック数を計画してください。最新の詳細な表は **[English README](./README.md#tool-status-whats-actually-tested)** または [docs/FEATURES.md](./docs/FEATURES.md) を参照。
 
 詳細は **[INSTALL.md](./INSTALL.md)** と English README。

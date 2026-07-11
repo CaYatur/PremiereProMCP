@@ -83,13 +83,19 @@ async function resolveVideoFilterComponent(name) {
 }
 
 module.exports = {
-  "effect.listAvailable": async ({ query }) => {
+  "effect.listAvailable": async ({ query, kind } = {}) => {
     try {
+      // `kind` narrows the enumeration to just the video (or audio) side of
+      // Premiere's Effects panel. When asking for video-only we can skip the
+      // audio factory calls entirely (and vice-versa) — cheaper, and it's the
+      // common case ("list the video effects I can drop on this clip").
+      const wantVideo = kind !== "audio";
+      const wantAudio = kind !== "video";
       const [videoMatch, videoDisplay, audioMatch, audioDisplay] = await Promise.all([
-        ppro.VideoFilterFactory.getMatchNames(),
-        ppro.VideoFilterFactory.getDisplayNames(),
-        ppro.AudioFilterFactory.getMatchNames ? ppro.AudioFilterFactory.getMatchNames() : Promise.resolve([]),
-        ppro.AudioFilterFactory.getDisplayNames(),
+        wantVideo ? ppro.VideoFilterFactory.getMatchNames() : Promise.resolve([]),
+        wantVideo ? ppro.VideoFilterFactory.getDisplayNames() : Promise.resolve([]),
+        wantAudio && ppro.AudioFilterFactory.getMatchNames ? ppro.AudioFilterFactory.getMatchNames() : Promise.resolve([]),
+        wantAudio ? ppro.AudioFilterFactory.getDisplayNames() : Promise.resolve([]),
       ]);
       let all = [
         ...videoMatch.map((matchName, i) => ({ matchName, displayName: videoDisplay[i], kind: "video" })),

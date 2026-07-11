@@ -18,7 +18,8 @@ export const trackTools = [
   defineTool({
     name: "track_add",
     title: "Add track",
-    description: "Add a new video or audio track to a sequence.",
+    description:
+      "Add a new video or audio track to a sequence. KNOWN LIMITATION: the Premiere UXP API exposes no add-track method, so this fails on current builds. Instead create the sequence with enough tracks up front, or place a clip at a higher track index (clip_overwrite/clip_insert) — Premiere auto-creates the tracks it needs.",
     inputSchema: {
       sequenceId: z.string().optional(),
       trackType,
@@ -104,7 +105,8 @@ export const trackTools = [
   defineTool({
     name: "track_add_video",
     title: "Add video track",
-    description: "Add a video track (convenience alias of track_add).",
+    description:
+      "Add a video track (convenience alias of track_add). KNOWN LIMITATION: unsupported by the Premiere UXP API — plan track count at sequence_create, or place a clip at a higher video track index instead.",
     inputSchema: { sequenceId: z.string().optional() },
     handler: async (p, ctx) => {
       const data = await ctx.relay.call("track.add", { ...p, trackType: "video" });
@@ -115,7 +117,8 @@ export const trackTools = [
   defineTool({
     name: "track_add_audio",
     title: "Add audio track",
-    description: "Add an audio track (convenience alias of track_add).",
+    description:
+      "Add an audio track (convenience alias of track_add). KNOWN LIMITATION: unsupported by the Premiere UXP API — plan track count at sequence_create, or place a clip at a higher audio track index instead.",
     inputSchema: { sequenceId: z.string().optional() },
     handler: async (p, ctx) => {
       const data = await ctx.relay.call("track.add", { ...p, trackType: "audio" });

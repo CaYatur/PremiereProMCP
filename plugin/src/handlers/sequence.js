@@ -118,15 +118,26 @@ module.exports = {
   },
 
   "sequence.setInOut": async ({ sequenceId, inTicks, outTicks }) => {
-    // Hardened 2026-07-11: a real session confirmed sequence.setInPoint is
-    // not a function on this build's Sequence instance. Feature-detect a
-    // few plausible locations for the same capability (direct instance
-    // method, or an Action-factory pair on SequenceEditor, matching the
-    // pattern every other mutation in this file uses) before giving up.
-    // Each attempt is typeof-guarded, so a missing method is a no-op, not
-    // a crash — safe to try even where we can't verify live.
+    // Fixed 2026-07-11: the Action factories for sequence in/out points live
+    // on the *Sequence object itself* — `sequence.createSetInPointAction(t)` /
+    // `createSetOutPointAction(t)` — introduced in Premiere 25.6 (confirmed
+    // against Adobe's official ppro_reference for the Sequence class). The
+    // previous version looked for them on SequenceEditor, where they don't
+    // exist, which is why it kept reporting "no candidate method found."
+    //
+    // Because `clip_append`/`clip_insert` (which drive the 25.6-era
+    // createInsertProjectItemAction) work on this build, the host is >= 25.6,
+    // so these factories should be present. Still feature-detected: we prefer
+    // the Sequence host, fall back to a SequenceEditor host, then to a direct
+    // setInPoint/setOutPoint instance method, so nothing crashes on a build
+    // that happens to differ.
     const project = await getActiveProject();
     const sequence = await getSequence(project, sequenceId);
+    if (inTicks === undefined && outTicks === undefined) {
+      const e = new Error("Provide inTicks and/or outTicks (as tick strings).");
+      e.code = "INVALID_PARAMS";
+      throw e;
+    }
     let editor = null;
     try {
       editor = await getEditor(sequence);
@@ -135,42 +146,58 @@ module.exports = {
     }
     const errors = [];
 
-    async function trySet(kind, ticks) {
-      if (ticks === undefined) return true;
-      const time = ppro.TickTime.createWithTicks(String(ticks));
-      const directMethod = kind === "in" ? "setInPoint" : "setOutPoint";
-      const actionMethod = kind === "in" ? "createSetInPointAction" : "createSetOutPointAction";
+    // Which host actually carries the action factory for this point kind?
+    function resolveFactory(kind) {
+      const method = kind === "in" ? "createSetInPointAction" : "createSetOutPointAction";
+      if (typeof sequence[method] === "function") return { host: sequence, method, label: `sequence.${method}` };
+      if (editor && typeof editor[method] === "function") return { host: editor, method, label: `editor.${method}` };
+      return null;
+    }
+
+    const wanted = [];
+    if (inTicks !== undefined) wanted.push({ kind: "in", ticks: inTicks });
+    if (outTicks !== undefined) wanted.push({ kind: "out", ticks: outTicks });
+    const resolved = wanted.map((w) => ({ ...w, factory: resolveFactory(w.kind) }));
+
+    // Preferred path: run every requested point in ONE compound transaction so
+    // the timeline never passes through an invalid intermediate state (e.g. a
+    // new in-point momentarily past the old out-point when moving both).
+    if (resolved.every((r) => r.factory)) {
+      try {
+        await runTransaction(project, "PPMCP sequence_set_in_out", (compoundAction) => {
+          for (const r of resolved) {
+            const time = ppro.TickTime.createWithTicks(String(r.ticks));
+            const action = r.factory.host[r.factory.method](time);
+            if (!action) throw new Error(`${r.factory.label} returned null`);
+            const ok = compoundAction.addAction(action);
+            if (ok === false) throw new Error(`addAction returned false for ${r.factory.label}`);
+          }
+        });
+        return { updated: true, via: resolved.map((r) => r.factory.label).join(" + ") };
+      } catch (err) {
+        errors.push(`action-factory: ${err && err.message ? err.message : err}`);
+      }
+    }
+
+    // Fallback: direct instance methods, if a build exposes them.
+    let directOk = 0;
+    for (const w of wanted) {
+      const directMethod = w.kind === "in" ? "setInPoint" : "setOutPoint";
       if (typeof sequence[directMethod] === "function") {
         try {
-          await sequence[directMethod](time);
-          return true;
+          await sequence[directMethod](ppro.TickTime.createWithTicks(String(w.ticks)));
+          directOk += 1;
         } catch (err) {
           errors.push(`sequence.${directMethod}: ${err && err.message ? err.message : err}`);
         }
       }
-      if (editor && typeof editor[actionMethod] === "function") {
-        try {
-          runTransaction(project, `PPMCP sequence_set_in_out ${kind}`, (compoundAction) => {
-            const action = editor[actionMethod](time);
-            if (!action) throw new Error(`${actionMethod} returned null`);
-            const ok = compoundAction.addAction(action);
-            if (ok === false) throw new Error("addAction returned false");
-          });
-          return true;
-        } catch (err) {
-          errors.push(`editor.${actionMethod}: ${err && err.message ? err.message : err}`);
-        }
-      }
-      return false;
     }
+    if (directOk === wanted.length) return { updated: true, via: "direct setInPoint/setOutPoint" };
 
-    const inOk = await trySet("in", inTicks);
-    const outOk = await trySet("out", outTicks);
-    if (inOk && outOk) return { updated: true };
     throw apiError(
       "sequence.setInOut",
       new Error(
-        `${errors.join(" ;; ") || "no candidate method found"}. Not exposed via UXP Sequence/SequenceEditor on this Premiere build.`,
+        `${errors.join(" ;; ") || "no candidate method found"}. Requires Premiere 25.6+ (Sequence.createSetInPointAction/createSetOutPointAction).`,
       ),
     );
   },

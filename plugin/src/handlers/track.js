@@ -33,15 +33,23 @@ module.exports = {
     const project = await getActiveProject();
     const sequence = await getSequence(project, sequenceId);
     try {
-      // sequence.addVideoTrack/addAudioTrack are NOT on the UXP Sequence API
-      // (live: "is not a function"). Docs note: createInsertProjectItemAction
-      // with trackIndex > existing count creates a track — but insert itself
-      // currently fails platform-wide. Try SequenceEditor helpers if present,
-      // else surface a clear, actionable error.
+      // CONFIRMED PLATFORM LIMITATION (verified 2026-07-11 against Adobe's
+      // official ppro_reference): the UXP API exposes NO method to add an
+      // empty track. Neither the Sequence class nor SequenceEditor has any
+      // addTrack / addVideoTrack / addAudioTrack / createAddTrackAction — this
+      // is missing from Premiere itself, not a PPMCP bug, and cannot be fixed
+      // plugin-side. We still feature-detect (a future Premiere release could
+      // add one of these), so this becomes a no-op that "just works" the day
+      // Adobe ships it — but today it falls through to a clear error.
       const { getEditor, getTrackCount } = require("../ppro.js");
-      const editor = await getEditor(sequence);
+      let editor = null;
+      try {
+        editor = await getEditor(sequence);
+      } catch {
+        editor = null;
+      }
       const count = await getTrackCount(sequence, trackType);
-      if (typeof editor.createAddTrackAction === "function") {
+      if (editor && typeof editor.createAddTrackAction === "function") {
         const action = editor.createAddTrackAction(trackType, count);
         await runTransaction(project, "PPMCP track_add", (c) => c.addAction(action));
         return { added: true, trackType, via: "createAddTrackAction", trackIndex: count };
@@ -51,7 +59,12 @@ module.exports = {
         return { added: true, trackType, via: "sequence.addTrack" };
       }
       const e = new Error(
-        `No UXP method to add a ${trackType} track on this Premiere build (sequence.addVideoTrack/addAudioTrack missing; SequenceEditor has no createAddTrackAction). Workaround: createSequenceFromMedia, or insert media at a high track index once clip_insert works on this host.`,
+        `Adding a ${trackType} track is not supported by the Premiere UXP API on any current build ` +
+          `(no addTrack/addVideoTrack/addAudioTrack/createAddTrackAction exists on Sequence or SequenceEditor — ` +
+          `a confirmed Adobe platform limitation, not a plugin bug). ` +
+          `Workarounds: (1) create the sequence with enough tracks up front (sequence_create / a preset), or ` +
+          `(2) place a clip at a higher track index with clip_overwrite/clip_insert — Premiere is expected to ` +
+          `auto-create the intervening tracks when it drops the clip there.`,
       );
       e.code = "PREMIERE_API_ERROR";
       throw e;

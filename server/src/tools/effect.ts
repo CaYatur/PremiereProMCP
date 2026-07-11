@@ -15,19 +15,24 @@ export const effectTools = [
     name: "effect_list_available",
     title: "List available effects",
     description:
-      "List effects from Premiere's Effects panel (VideoFilterFactory/AudioFilterFactory — the same catalog as Gaussian Blur, Lumetri, RGB Split, Noise, etc.). Returns matchName + displayName. Use query e.g. \"glitch\", \"blur\", \"noise\". Then apply with effect_add or a dedicated effect_apply_* shortcut.",
-    inputSchema: { query: z.string().optional().describe("Case-insensitive substring filter on display name.") },
+      "List the FULL Premiere Effects panel (VideoFilterFactory/AudioFilterFactory — ~105 video + ~54 audio effects: Gaussian Blur, Lumetri, RGB Split, Noise, Directional Blur, Lens Distortion, and everything else). Any of these can be applied with effect_add by displayName — you are NOT limited to the dedicated effect_apply_* shortcuts. Returns matchName + displayName + kind. Pass kind:\"video\" to get just the video effects applicable to a clip; use query e.g. \"blur\", \"glitch\", \"distort\" to narrow the list.",
+    inputSchema: {
+      query: z.string().optional().describe("Case-insensitive substring filter on display name."),
+      kind: z.enum(["video", "audio"]).optional().describe("Restrict to video-only or audio-only effects. Omit for both."),
+    },
     handler: async (p, ctx) => {
       const data = await ctx.relay.call("effect.listAvailable", p);
-      return { text: `Available effects: ${JSON.stringify(data)}`, data };
+      const count = Array.isArray(data) ? data.length : 0;
+      return { text: `${count} available effect(s): ${JSON.stringify(data)}`, data };
     },
   }),
 
   defineTool({
     name: "effect_add",
     title: "Add effect to clip",
-    description: "Apply an effect to a clip by matchName (from effect_list_available), e.g. \"AE.ADBE Gaussian Blur 2\" or \"AE.ADBE Color Balance (HLS)\".",
-    inputSchema: { ...clipRef, matchName: z.string() },
+    description:
+      "Apply ANY effect from the Effects panel to a clip. `matchName` accepts either the friendly displayName from effect_list_available (e.g. \"Gaussian Blur\", \"Lens Distortion\", \"Directional Blur\") OR the raw matchName (e.g. \"AE.ADBE Gaussian Blur 2\") — the plugin resolves display names automatically, so you don't need to know the cryptic id. This is the general path for the whole video Effects panel; the effect_apply_* tools are just convenience shortcuts for the common ones.",
+    inputSchema: { ...clipRef, matchName: z.string().describe("Effect displayName or matchName from effect_list_available.") },
     handler: async (p, ctx) => {
       const data = await ctx.relay.call("effect.add", p);
       return { text: `Added effect ${p.matchName}.`, data };

@@ -71,6 +71,6 @@ claude mcp add premiere-pro -- "C:\Users\Tu\AppData\Local\PPMCP\node\node.exe" "
 
 ## Estado de las herramientas
 
-~225 herramientas MCP; la mayoria estan type-verified (mapean a un metodo real de la API de Adobe pero no todas se han probado en vivo aun). Pruebas reales recientes ya encontraron varios problemas confirmados (con solucion) y corrigieron una suposicion anterior — ver la tabla detallada, actualizada, en el **[English README](./README.md#tool-status-whats-actually-tested)** o en [docs/FEATURES.md](./docs/FEATURES.md).
+277 herramientas MCP en ~20 categorias. `clip_append` ya esta confirmado funcionando y `sequence_set_in_out` fue corregido (usaba el objeto equivocado; ahora llama a `sequence.createSetInPointAction`, Premiere 25.6+). Limitacion confirmada de la plataforma Adobe: la API UXP no tiene metodo para anadir pistas vacias (`track_add`) — planifica el numero de pistas al crear la secuencia. Tabla detallada y actualizada en el **[English README](./README.md#tool-status-whats-actually-tested)** o en [docs/FEATURES.md](./docs/FEATURES.md).
 
 Details: **[INSTALL.md](./INSTALL.md)** · English README for full features.
