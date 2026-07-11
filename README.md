@@ -18,7 +18,7 @@
 | Chinese (Simplified) | [README.zh-CN.md](./README.zh-CN.md) |
 
 ---
-![PremiereMCP Image](PremiereMCP.png)
+![PremiereMCP Image](./PremiereMCP.png)
 
 # Install (start here)
 
