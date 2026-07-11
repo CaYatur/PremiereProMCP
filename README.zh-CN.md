@@ -71,6 +71,6 @@ claude mcp add premiere-pro -- "C:\Users\你\AppData\Local\PPMCP\node\node.exe" 
 
 ## 工具状态
 
-约 20 个类别、277 个 MCP 工具。`clip_append` 现已确认可用，`sequence_set_in_out` 已修复（之前找错了对象，现在调用 `sequence.createSetInPointAction`，Premiere 25.6+）。已确认的 Adobe 平台限制：UXP API 没有添加空轨道的方法（`track_add`）——请在创建序列时规划好轨道数量。最新详细表格见 **[English README](./README.md#tool-status-whats-actually-tested)** 或 [docs/FEATURES.md](./docs/FEATURES.md)。
+约 20 个类别、277 个 MCP 工具。`clip_append` 现已确认可用，`sequence_set_in_out` 现已确认可用（实机确认，调用 `sequence.createSetInPointAction`，Premiere 25.6+）。已确认的 Adobe 平台限制：UXP API 没有添加空轨道的方法（`track_add`）——请在创建序列时规划好轨道数量。最新详细表格见 **[English README](./README.md#tool-status-whats-actually-tested)** 或 [docs/FEATURES.md](./docs/FEATURES.md)。
 
 详见 **[INSTALL.md](./INSTALL.md)** 与英文 README 功能说明。

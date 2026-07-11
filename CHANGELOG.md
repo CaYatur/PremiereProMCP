@@ -4,6 +4,36 @@ All notable changes to PPMCP are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] — 2026-07-11
+
+Follow-up release after another real Premiere test session.
+
+### Confirmed working
+
+- **`sequence_set_in_out`** — the 1.0.1 fix is now **verified live**: a re-test
+  set the in/out points and returned
+  `"via": "sequence.createSetInPointAction + sequence.createSetOutPointAction"`.
+  Promoted from "fix applied, pending re-test" to confirmed.
+
+### Fixed
+
+- **`app_get_version`** — no longer returns `null`. The old code read `version`
+  off the `Application` **class**, but per Adobe's `ppro_reference` `version` is
+  an *instance* property (`Promise<string>`, 25.6+), so it never resolved. Now
+  reads the version from the UXP **host** object
+  (`require("uxp").host.version`) and returns `{ version, host, uxpVersion }`.
+  *(Fix applied, pending a live re-test.)*
+
+### Corrected documentation
+
+- **`track_add` workaround retracted.** 1.0.1 suggested "place a clip at a
+  higher track index and let Premiere auto-create the track." That was **tested
+  and does NOT work** on this build — it fails with `"[INTERNAL_ERROR] BE: An
+  invalid track index was passed to the sequence"`. The track count is fixed at
+  sequence creation and cannot be increased afterward **by any means**; plan it
+  at `sequence_create` (or use a preset with enough tracks). Docs, tool
+  descriptions, and the plugin error message updated accordingly.
+
 ## [1.0.1] — 2026-07-11
 
 Bug-fix and capability release driven by real end-to-end Premiere testing.
@@ -41,11 +71,12 @@ below are what changed since 1.0.0.
 - **`track_add` / `track_add_video` / `track_add_audio`** — confirmed **Adobe
   platform limitation**, not a plugin bug. The Premiere UXP API exposes no
   add-track method on `Sequence` or `SequenceEditor` (verified against
-  Adobe's official `ppro_reference`). Workaround: create the sequence with
-  enough tracks up front, or drop a clip at a higher track index with
-  `clip_overwrite` / `clip_insert` to force-create tracks. This also caps
-  `sequence_create` / `sequence_create_from_media` at the preset's track
-  count (~3 video + 3–4 audio).
+  Adobe's official `ppro_reference`). Plan the track count up front at
+  `sequence_create` (or a preset with enough tracks); it cannot be increased
+  afterward. This caps `sequence_create` / `sequence_create_from_media` at
+  the preset's track count (~3 video + 3–4 audio). *(See 1.0.2 — the
+  "higher track index auto-creates a track" idea suggested here was later
+  tested and does not work.)*
 
 ### Docs
 
@@ -63,5 +94,6 @@ pass, export, and screenshots. Atomic multi-step edits via
 `Project.executeTransaction()`, rate limiting, and file checkpoints.
 Pure-PowerShell Windows Setup with bundled portable Node.
 
+[1.0.2]: https://github.com/CaYatur/PremiereProMCP/releases/tag/v1.0.2
 [1.0.1]: https://github.com/CaYatur/PremiereProMCP/releases/tag/v1.0.1
 [1.0.0]: https://github.com/CaYatur/PremiereProMCP/releases/tag/v1.0.0

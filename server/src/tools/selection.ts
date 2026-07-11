@@ -226,7 +226,7 @@ export const selectionTools = [
     name: "app_get_version",
     title: "Get Premiere Pro version",
     description:
-      "Get the version string of the running Premiere Pro application (ppro.Application.version). Note: one live probe returned undefined despite the type declaration — the tool surfaces that honestly.",
+      "Get the running Premiere Pro version. Reads it from the UXP host object (require('uxp').host.version); returns { version, host, uxpVersion }. Earlier builds returned null because the old code read the version off the Application class instead of the host — fixed in 1.0.2.",
     inputSchema: {},
     handler: async (_p, ctx) => {
       const data = await ctx.relay.call("app.getVersion", {});

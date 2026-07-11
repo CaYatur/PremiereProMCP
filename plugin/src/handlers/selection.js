@@ -229,14 +229,41 @@ module.exports = {
   },
 
   "app.getVersion": async () => {
-    // Confirmed live (docs/PLAN.md §3 Phase 0 probe): ppro.Application.version
-    // resolved to `undefined` in one probe session — still the documented
-    // property; surface whatever we get and let the model see it.
+    // Fixed 2026-07-11 (pending live re-test): the old path read
+    // `ppro.Application.version` off the CLASS and always got `undefined` —
+    // per Adobe's ppro_reference, `version` is an *instance* property
+    // (Promise<string>, 25.6+), not a static, so reading it off the class
+    // constructor never resolves. The load-bearing, build-agnostic path is
+    // the UXP host object (`require("uxp").host.version`), which every UXP
+    // app exposes. NOTE for the tester: host.version should be the *Premiere*
+    // version (e.g. "25.x"); the UXP-runtime version is a separate field
+    // (`require("uxp").versions.uxp`) and is reported here as `uxpVersion`.
     try {
-      const version = ppro.Application && ppro.Application.version !== undefined
-        ? await Promise.resolve(ppro.Application.version)
-        : undefined;
-      return { version: version ?? null };
+      let version = null;
+      let host = null;
+      let uxpVersion = null;
+      try {
+        const uxp = require("uxp");
+        if (uxp && uxp.host) {
+          version = uxp.host.version ?? null;
+          host = uxp.host.name ?? null;
+        }
+        if (uxp && uxp.versions) uxpVersion = uxp.versions.uxp ?? null;
+      } catch {
+        /* uxp module shape differs on this build — fall through */
+      }
+      // Cheap secondary guard only; ppro.Application is the class, so this
+      // usually stays undefined — kept in case a build exposes it.
+      if (version === null) {
+        try {
+          if (ppro.Application && ppro.Application.version !== undefined) {
+            version = (await Promise.resolve(ppro.Application.version)) ?? null;
+          }
+        } catch {
+          /* not exposed */
+        }
+      }
+      return { version, host, uxpVersion };
     } catch (err) {
       throw apiError("app.getVersion", err);
     }

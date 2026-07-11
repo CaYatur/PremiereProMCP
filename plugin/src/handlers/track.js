@@ -62,9 +62,10 @@ module.exports = {
         `Adding a ${trackType} track is not supported by the Premiere UXP API on any current build ` +
           `(no addTrack/addVideoTrack/addAudioTrack/createAddTrackAction exists on Sequence or SequenceEditor — ` +
           `a confirmed Adobe platform limitation, not a plugin bug). ` +
-          `Workarounds: (1) create the sequence with enough tracks up front (sequence_create / a preset), or ` +
-          `(2) place a clip at a higher track index with clip_overwrite/clip_insert — Premiere is expected to ` +
-          `auto-create the intervening tracks when it drops the clip there.`,
+          `The track count is fixed when the sequence is created and CANNOT be increased afterward: ` +
+          `inserting a clip past the existing track count does NOT auto-create a track either — it fails with ` +
+          `"[INTERNAL_ERROR] BE: An invalid track index was passed to the sequence" (tested 2026-07-11). ` +
+          `Only fix: choose the track count at creation (sequence_create, or a sequence preset that already has enough tracks).`,
       );
       e.code = "PREMIERE_API_ERROR";
       throw e;

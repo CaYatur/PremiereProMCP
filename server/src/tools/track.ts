@@ -19,7 +19,7 @@ export const trackTools = [
     name: "track_add",
     title: "Add track",
     description:
-      "Add a new video or audio track to a sequence. KNOWN LIMITATION: the Premiere UXP API exposes no add-track method, so this fails on current builds. Instead create the sequence with enough tracks up front, or place a clip at a higher track index (clip_overwrite/clip_insert) — Premiere auto-creates the tracks it needs.",
+      "Add a new video or audio track to a sequence. KNOWN LIMITATION (confirmed Adobe UXP platform gap, not a plugin bug): the Premiere UXP API exposes no add-track method, so this always fails on current builds. The track count is fixed at sequence creation and CANNOT be increased later — inserting a clip past the existing track count does NOT auto-create a track either (it fails with \"invalid track index\"). Plan the track count when you create the sequence (sequence_create, or a preset that already has enough tracks).",
     inputSchema: {
       sequenceId: z.string().optional(),
       trackType,
@@ -106,7 +106,7 @@ export const trackTools = [
     name: "track_add_video",
     title: "Add video track",
     description:
-      "Add a video track (convenience alias of track_add). KNOWN LIMITATION: unsupported by the Premiere UXP API — plan track count at sequence_create, or place a clip at a higher video track index instead.",
+      "Add a video track (convenience alias of track_add). KNOWN LIMITATION: unsupported by the Premiere UXP API and unfixable plugin-side — the track count is fixed at sequence creation and cannot be increased later (inserting past the track count also fails). Plan the track count at sequence_create.",
     inputSchema: { sequenceId: z.string().optional() },
     handler: async (p, ctx) => {
       const data = await ctx.relay.call("track.add", { ...p, trackType: "video" });
@@ -118,7 +118,7 @@ export const trackTools = [
     name: "track_add_audio",
     title: "Add audio track",
     description:
-      "Add an audio track (convenience alias of track_add). KNOWN LIMITATION: unsupported by the Premiere UXP API — plan track count at sequence_create, or place a clip at a higher audio track index instead.",
+      "Add an audio track (convenience alias of track_add). KNOWN LIMITATION: unsupported by the Premiere UXP API and unfixable plugin-side — the track count is fixed at sequence creation and cannot be increased later (inserting past the track count also fails). Plan the track count at sequence_create.",
     inputSchema: { sequenceId: z.string().optional() },
     handler: async (p, ctx) => {
       const data = await ctx.relay.call("track.add", { ...p, trackType: "audio" });

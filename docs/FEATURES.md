@@ -54,27 +54,32 @@
 >    `addTrack`/`addVideoTrack`/`addAudioTrack`/`createAddTrackAction`. The
 >    capability is simply absent from the Premiere UXP API. The handler still
 >    feature-detects (so it starts working the day Adobe ships one) but today
->    returns a clear error. **Workarounds:** create the sequence with enough
->    tracks up front (`sequence_create`/a preset), or place a clip at a
->    higher track index with `clip_overwrite`/`clip_insert` (both now work) —
->    Premiere is expected to auto-create the intervening tracks. This also
->    caps `sequence_create`/`sequence_create_from_media` at the preset's
->    track count (≈3 video + 3–4 audio).
-> 3. **`sequence_set_in_out`** — **ROOT CAUSE FOUND AND FIX CORRECTED
->    (pending live re-test).** Real testing walked it through two errors:
->    first `"sequence.setInPoint is not a function"`, then — after the first
->    fix attempt — `"no candidate method found… Not exposed via UXP
->    Sequence/SequenceEditor"`. That first attempt looked for the Action
->    factory on the **wrong object** (`SequenceEditor`). Per Adobe's official
->    `ppro_reference`, `createSetInPointAction`/`createSetOutPointAction` are
->    on the **`Sequence` object itself**, introduced in Premiere 25.6. The
+>    returns a clear error. **The track count is fixed at sequence creation
+>    and cannot be increased afterward, by any means.** The "drop a clip at a
+>    higher track index and let Premiere auto-create the track" idea — which
+>    an earlier version of this doc suggested — was **tested 2026-07-11 and
+>    does NOT work** on this build: it fails with `"[INTERNAL_ERROR] BE: An
+>    invalid track index was passed to the sequence"`. Only real option: pick
+>    the track count at creation (`sequence_create`, or a preset with enough
+>    tracks). This also caps `sequence_create`/`sequence_create_from_media` at
+>    the preset's track count (≈3 video + 3–4 audio).
+> 3. **`sequence_set_in_out`** — **FIXED AND CONFIRMED WORKING (re-tested
+>    2026-07-11).** A real session set the in/out points and returned
+>    `"via": "sequence.createSetInPointAction + sequence.createSetOutPointAction"`.
+>    Root cause of the earlier failures: the first fix attempt looked for the
+>    Action factory on the **wrong object** (`SequenceEditor`). Per Adobe's
+>    official `ppro_reference`, `createSetInPointAction`/`createSetOutPointAction`
+>    are on the **`Sequence` object itself**, introduced in Premiere 25.6. The
 >    handler now calls `sequence.createSetInPointAction(t)` /
 >    `createSetOutPointAction(t)` and commits both in **one compound
 >    transaction** (no invalid in>out intermediate state), keeping the
->    editor/direct paths as fallbacks. Since `clip_append` (a 25.6-era
->    `createInsertProjectItemAction` path) works on this build, the build is
->    ≥25.6, so these factories should be present — hence "should work," not
->    just "might."
+>    editor/direct paths as fallbacks. Shipped in 1.0.1, confirmed in 1.0.2.
+> 5. **`app_get_version`** — **fix applied 1.0.2, pending live re-test.**
+>    Returned `null` because it read `version` off the `Application` *class*,
+>    but `version` is an *instance* property (`Promise<string>`, 25.6+). Now
+>    reads `require("uxp").host.version` (the build-agnostic UXP host path);
+>    returns `{ version, host, uxpVersion }`. Tester: confirm `host.version`
+>    is the Premiere version, not the UXP-runtime version (`uxpVersion`).
 > 4. **`media_get_info` / `media_analyze_file_info`** — never returned
 >    duration, resolution, or frame rate; `ClipProjectItem` only exposes
 >    path/proxy/offline-style fields via UXP (see `plugin/src/handlers/
@@ -318,7 +323,7 @@ catalog listed several planning-era names (`sequence_create_from_preset`,
 implemented under those names. Real list, real tags:
 `sequence_create` ✅, `sequence_get_active`, `sequence_list`,
 `sequence_set_active`, `sequence_get_settings`,
-`sequence_set_in_out` ❔ (root cause found + fix corrected 2026-07-11, pending live re-test — the Action factory lives on the `Sequence` object, not `SequenceEditor`; now calls `sequence.createSetInPointAction`/`createSetOutPointAction`, Premiere 25.6+, both in one compound transaction — see status callout above),
+`sequence_set_in_out` ✅ (fixed + confirmed working, re-tested 2026-07-11 — set in/out via `sequence.createSetInPointAction + createSetOutPointAction`; the factory lives on the `Sequence` object, not `SequenceEditor`, Premiere 25.6+, both committed in one compound transaction — see status callout above),
 `sequence_delete`, `sequence_close`,
 `sequence_create_from_media` (the fallback destination when `clip_insert` truly can't insert — see §D), `sequence_get_duration`, `sequence_get_tracks`,
 `sequence_export_frame`
@@ -334,10 +339,12 @@ don't match what shipped. Real list, real tags:
 `track_add` ✗, `track_add_video` ✗, `track_add_audio` ✗ (confirmed Adobe
 platform limitation, verified 2026-07-11 against the official
 `ppro_reference` — no add-track method exists on `Sequence` or
-`SequenceEditor`; not a plugin bug and not fixable plugin-side. Workaround:
-plan track count at `sequence_create`, or drop a clip at a higher track
-index via `clip_overwrite`/`clip_insert` to force-create tracks — see
-status callout above)
+`SequenceEditor`; not a plugin bug and not fixable plugin-side. The track
+count is fixed at creation and cannot be grown afterward — inserting a clip
+past the existing track count does NOT auto-create a track either (tested:
+`"[INTERNAL_ERROR] BE: An invalid track index was passed to the sequence"`).
+Only option: plan track count at `sequence_create` / a preset — see status
+callout above)
 
 ### D. Clip / TrackItem Editing — `clip_*` (33) — the "edit quality" core
 `clip_insert` ✅ (live-confirmed on ~19 clips in a real session via internal multi-variant retry — see status callout above; can be slow due to the retry loop), `clip_overwrite` ✅, `clip_append` ✅ (was broken — `"Script action failed to execute"` — now shares `clip_insert`'s retry logic via one helper; re-test 2026-07-11 confirmed it works and appends in the correct order), `clip_ripple_delete`,
@@ -565,7 +572,7 @@ a thin API wrapper. Treat these as real engineering work, not a quick win.
 `playhead_go_to_marker`, `playhead_go_to_next_edit`,
 `playhead_go_to_previous_edit`, `selection_get_current`,
 `selection_set`, `selection_clear`, `workspace_get_active_panel`,
-`workspace_set_layout`, `app_get_version` ❔ (live probe: `ppro.Application.version` resolved to `undefined` — a second, quieter type-vs-runtime gap; needs its own lookup), `app_get_connection_status`
+`workspace_set_layout`, `app_get_version` ❔ (was `null` — read `version` off the `Application` class, but it's an *instance* property; fix applied 1.0.2, pending re-test — now reads `require("uxp").host.version`, returns `{ version, host, uxpVersion }`), `app_get_connection_status`
 
 ### Q. Dedicated common effect/transition shortcuts — `effect_apply_*`, `audio_apply_*`, `transition_add_*` (41)
 Added 2026-07-10, directly in response to the competitive tool-count
