@@ -77,6 +77,98 @@ async function buildSingleItemSelection(sequence, item) {
   return selection;
 }
 
+/** Shared by clip.insert and clip.append: try raw ProjectItem +
+ * ClipProjectItem.cast, multiple limitShift/audio-index combos, then an
+ * overwrite fallback. Action created INSIDE transaction. Confirmed live
+ * to succeed via one of these variants on builds where a naive single
+ * -attempt createInsertProjectItemAction call fails outright. */
+async function insertProjectItemWithRetry({
+  project,
+  editor,
+  projectItem,
+  castItem,
+  time,
+  videoTrackIndex,
+  audioTrackIndex,
+  label,
+}) {
+  const errors = [];
+  const itemVariants = [
+    { label: "cast", item: castItem },
+    { label: "raw", item: projectItem },
+  ];
+  const combos = [
+    { limitShift: true, aIdx: audioTrackIndex },
+    { limitShift: false, aIdx: audioTrackIndex },
+    { limitShift: true, aIdx: 0 },
+    { limitShift: true, aIdx: -1 },
+    { limitShift: false, aIdx: -1 },
+  ];
+  for (const variant of itemVariants) {
+    for (const c of combos) {
+      try {
+        runTransaction(project, `PPMCP ${label} ${variant.label} lim=${c.limitShift} a=${c.aIdx}`, (compoundAction) => {
+          const action = editor.createInsertProjectItemAction(variant.item, time, videoTrackIndex, c.aIdx, c.limitShift);
+          if (!action) throw new Error("createInsertProjectItemAction returned null");
+          const ok = compoundAction.addAction(action);
+          if (ok === false) throw new Error("addAction returned false");
+        });
+        return {
+          inserted: true,
+          via: `insert-${variant.label}`,
+          limitShift: c.limitShift,
+          videoTrackIndex,
+          audioTrackIndex: c.aIdx,
+        };
+      } catch (err) {
+        errors.push(`${variant.label}/lim=${c.limitShift}/a=${c.aIdx}: ${err && err.message ? err.message : err}`);
+      }
+    }
+  }
+  // Soft fallback: overwrite often works when insert is blocked on a build
+  try {
+    runTransaction(project, `PPMCP ${label}->overwrite fallback`, (compoundAction) => {
+      const action = editor.createOverwriteItemAction(castItem, time, videoTrackIndex, audioTrackIndex);
+      if (!action) throw new Error("overwrite null");
+      compoundAction.addAction(action);
+    });
+    return {
+      inserted: true,
+      via: "overwrite-fallback",
+      note: "createInsertProjectItemAction failed on this build; used overwrite instead (may cover existing media).",
+      videoTrackIndex,
+      audioTrackIndex,
+      attempts: errors.slice(0, 6),
+    };
+  } catch (err) {
+    errors.push(`overwrite-fallback: ${err && err.message ? err.message : err}`);
+  }
+  return { inserted: false, errors };
+}
+
+async function castProjectItem(projectItem) {
+  try {
+    if (ppro.ClipProjectItem && typeof ppro.ClipProjectItem.cast === "function") {
+      return ppro.ClipProjectItem.cast(projectItem) || projectItem;
+    }
+  } catch {
+    /* fall through */
+  }
+  return projectItem;
+}
+
+function timeFromTicks(atTicks) {
+  try {
+    if ((!atTicks || atTicks === "0") && ppro.TickTime.TIME_ZERO) return ppro.TickTime.TIME_ZERO;
+    if (ppro.TickTime.createWithSeconds) {
+      return ppro.TickTime.createWithSeconds(Number(BigInt(atTicks)) / 254016000000);
+    }
+  } catch {
+    /* fall through */
+  }
+  return tickTime(atTicks || "0");
+}
+
 module.exports = {
   "clip.list": async ({ sequenceId, trackType, trackIndex }) => {
     const project = await getActiveProject();
@@ -94,99 +186,30 @@ module.exports = {
   },
 
   "clip.insert": async ({ sequenceId, trackType, trackIndex, projectItemId, atTicks }) => {
-    // Hardened: try raw ProjectItem + ClipProjectItem.cast, multiple
-    // limitShift/audio-index combos. Action created INSIDE transaction.
     const project = await getActiveProject();
     const sequence = await getSequence(project, sequenceId);
     await getTrack(sequence, trackType, trackIndex);
     const projectItem = await findProjectItemById(project, projectItemId);
-    let castItem = projectItem;
-    try {
-      if (ppro.ClipProjectItem && typeof ppro.ClipProjectItem.cast === "function") {
-        castItem = ppro.ClipProjectItem.cast(projectItem) || projectItem;
-      }
-    } catch {
-      castItem = projectItem;
-    }
+    const castItem = await castProjectItem(projectItem);
     const editor = await getEditor(sequence);
     const videoTrackIndex = trackType === "video" ? trackIndex : 0;
     const audioTrackIndex = trackType === "audio" ? trackIndex : trackIndex;
-    let time;
-    try {
-      if ((!atTicks || atTicks === "0") && ppro.TickTime.TIME_ZERO) time = ppro.TickTime.TIME_ZERO;
-      else if (ppro.TickTime.createWithSeconds) {
-        time = ppro.TickTime.createWithSeconds(Number(BigInt(atTicks)) / 254016000000);
-      } else time = tickTime(atTicks);
-    } catch {
-      time = tickTime(atTicks || "0");
-    }
+    const time = timeFromTicks(atTicks);
 
-    const errors = [];
-    const itemVariants = [
-      { label: "cast", item: castItem },
-      { label: "raw", item: projectItem },
-    ];
-    const combos = [
-      { limitShift: true, aIdx: audioTrackIndex },
-      { limitShift: false, aIdx: audioTrackIndex },
-      { limitShift: true, aIdx: 0 },
-      { limitShift: true, aIdx: -1 },
-      { limitShift: false, aIdx: -1 },
-    ];
-    for (const variant of itemVariants) {
-      for (const c of combos) {
-        try {
-          runTransaction(
-            project,
-            `PPMCP clip_insert ${variant.label} lim=${c.limitShift} a=${c.aIdx}`,
-            (compoundAction) => {
-              const action = editor.createInsertProjectItemAction(
-                variant.item,
-                time,
-                videoTrackIndex,
-                c.aIdx,
-                c.limitShift,
-              );
-              if (!action) throw new Error("createInsertProjectItemAction returned null");
-              const ok = compoundAction.addAction(action);
-              if (ok === false) throw new Error("addAction returned false");
-            },
-          );
-          return {
-            inserted: true,
-            via: `insert-${variant.label}`,
-            limitShift: c.limitShift,
-            videoTrackIndex,
-            audioTrackIndex: c.aIdx,
-          };
-        } catch (err) {
-          errors.push(
-            `${variant.label}/lim=${c.limitShift}/a=${c.aIdx}: ${err && err.message ? err.message : err}`,
-          );
-        }
-      }
-    }
-    // Soft fallback: overwrite often works when insert is blocked on a build
-    try {
-      runTransaction(project, "PPMCP clip_insert→overwrite fallback", (compoundAction) => {
-        const action = editor.createOverwriteItemAction(castItem, time, videoTrackIndex, audioTrackIndex);
-        if (!action) throw new Error("overwrite null");
-        compoundAction.addAction(action);
-      });
-      return {
-        inserted: true,
-        via: "overwrite-fallback",
-        note: "createInsertProjectItemAction failed on this build; used overwrite instead (may cover existing media).",
-        videoTrackIndex,
-        audioTrackIndex,
-        attempts: errors.slice(0, 6),
-      };
-    } catch (err) {
-      errors.push(`overwrite-fallback: ${err && err.message ? err.message : err}`);
-    }
+    const result = await insertProjectItemWithRetry({
+      project,
+      editor,
+      projectItem,
+      castItem,
+      time,
+      videoTrackIndex,
+      audioTrackIndex,
+      label: "clip_insert",
+    });
+    if (result.inserted) return result;
     throw apiError(
       "clip.insert",
-      new Error(`${errors.slice(0, 8).join(" ;; ")}. Workaround: sequence_create_from_media.`),
+      new Error(`${result.errors.slice(0, 8).join(" ;; ")}. Workaround: sequence_create_from_media.`),
     );
   },
 
@@ -576,21 +599,23 @@ module.exports = {
       atTicks = String((await last.getEndTime()).ticks);
     }
     const projectItem = await findProjectItemById(project, projectItemId);
-    try {
-      const editor = await getEditor(sequence);
-      const videoTrackIndex = trackType === "video" ? trackIndex : 0;
-      const audioTrackIndex = trackType === "audio" ? trackIndex : 0;
-      const action = editor.createInsertProjectItemAction(
-        projectItem,
-        tickTime(atTicks),
-        videoTrackIndex,
-        audioTrackIndex,
-        true,
-      );
-      await runTransaction(project, "PPMCP clip_append", (c) => c.addAction(action));
-      return { appended: true, atTicks };
-    } catch (err) {
-      throw apiError("clip.append", err);
-    }
+    const castItem = await castProjectItem(projectItem);
+    const editor = await getEditor(sequence);
+    const videoTrackIndex = trackType === "video" ? trackIndex : 0;
+    const audioTrackIndex = trackType === "audio" ? trackIndex : trackIndex;
+    const time = timeFromTicks(atTicks);
+
+    const result = await insertProjectItemWithRetry({
+      project,
+      editor,
+      projectItem,
+      castItem,
+      time,
+      videoTrackIndex,
+      audioTrackIndex,
+      label: "clip_append",
+    });
+    if (result.inserted) return { ...result, appended: true, atTicks };
+    throw apiError("clip.append", new Error(result.errors.slice(0, 8).join(" ;; ")));
   },
 };

@@ -798,7 +798,7 @@ export const workflowTools = [
     name: "workflow_fade_clip",
     title: "Fade clip opacity in/out",
     description:
-      "Opacity keyframes at clip edges: fade in from 0→100 over fadeInTicks at start, and/or fade out 100→0 at end.",
+      "Opacity keyframes at clip edges: fade in from 0→100 over fadeInTicks at start, and/or fade out 100→0 at end. Edge positions are read from the clip's CURRENT start/end — call this AFTER trimming to final length, or a later trim can push the fade-out keyframe past the new out-point and silently stop it applying.",
     inputSchema: {
       sequenceId: z.string().optional(),
       trackIndex: z.number().int().default(0),
@@ -972,7 +972,8 @@ export const workflowTools = [
   defineTool({
     name: "workflow_audio_fade",
     title: "Audio fade in/out on a clip",
-    description: "Add volume keyframes for fade-in and/or fade-out on an audio clip.",
+    description:
+      "Add volume keyframes for fade-in and/or fade-out on an audio clip. Fade points are calculated from the clip's CURRENT start/end at the moment this is called. Call this AFTER trimming the clip to its final length — trimming afterward can push the fade-out keyframe past the new out-point, so it silently stops applying.",
     inputSchema: {
       sequenceId: z.string().optional(),
       trackIndex: z.number().int(),

@@ -196,18 +196,29 @@ Rough cuts · cinematic SFX · music-rhythm cuts · ad-style motion cards · QA 
 
 **~225 MCP tools** across 17 categories (project, sequence, track, clip, transitions, effects, color/Lumetri, audio, text/titles/shapes, markers/metadata, multicam, proxy/media, export, analysis, batch, selection/system, plus ~15 high-level workflow tools). Most of that surface maps to a real, documented method in Adobe's own `@adobe/premierepro` UXP API and is expected to work, but hasn't all been individually exercised against a live Premiere session yet — see [docs/FEATURES.md](./docs/FEATURES.md) for the full tool-by-tool verification tier (type-verified / live-verified / verified-composed / known-broken).
 
-**What holds up well under real testing:** the core edit path (`clip_overwrite`, trim, roll/slip/slide, split, ripple delete), sequence/track management, shape add + position + fill color, `text_write`'s PNG fallback path, listing effects/transitions/markers, and media import. Multi-step edits (roll/slip/slide and composite workflow tools) are committed through Premiere's `Project.executeTransaction()` — several primitive actions run as one atomic unit, so a failure partway through doesn't leave the timeline half-edited. That transaction design has been the most reliable part of the whole plugin.
+**What holds up well under real, end-to-end testing** (a real ~48s multi-track sequence built from scratch, video + 4 audio tracks, transitions, gain, keyframed fades, markers, title, screenshot, save): sequence/project creation, `clip_overwrite`, trim, roll/slip/slide, split, ripple delete, shape add + position + fill color, `text_write`'s PNG fallback path, listing effects/transitions, gain/dB control, and project save/screenshot. Multi-step edits (roll/slip/slide and composite workflow tools) are committed through Premiere's `Project.executeTransaction()` — several primitive actions run as one atomic unit, so a failure partway through doesn't leave the timeline half-edited. That transaction design has been the most reliable part of the whole plugin.
 
-**Known issues right now, with a real workaround for each** (all four are specific gaps in this Premiere build's scripting API, not vague "might not work"):
+**`clip_insert` and `marker_add` are more reliable than earlier testing suggested.** Both now retry ~10-15 internal variants (different track-index/limit-shift/marker-type combinations) inside the plugin before giving up — in the latest real session, `clip_insert` succeeded on every one of ~19 video/audio clips (via one of those retry variants), and `marker_add` added 7 markers with no reported error. This retry loop is also part of why individual calls can feel slow. We don't yet know for certain whether that marker_add run went through the native path or the virtual-marker fallback (both return the same success message) — treat `marker_add` as "probably fine, unconfirmed which path," not "known broken."
+
+**Fixed since that session (pending a live re-test, not yet re-confirmed):**
+
+| Tool | What was wrong | What changed |
+|------|-----------------|--------------|
+| `clip_append` | Failed consistently (`"Script action failed to execute"`) — it used a single fixed attempt instead of the retry logic `clip_insert` already had | Now shares `clip_insert`'s ~10-variant retry (item cast/raw × limit-shift/audio-index combos) via one helper, so anything that made `clip_insert` succeed should make `clip_append` succeed too |
+| `sequence_set_in_out` | `"sequence.setInPoint is not a function"` — no fallback existed | Now also tries the `SequenceEditor` Action-factory pattern (`createSetInPointAction`/`createSetOutPointAction`) every other mutation in this codebase uses, feature-detected so it's a no-op if that method doesn't exist either |
+| `media_get_info` / `media_analyze_file_info` | Never returned duration, resolution, or frame rate | Now opportunistically probes a few extra fields (`getDuration`, `getFrameSize`, `width`/`height`, `getFrameRate`), feature-detected — returns them if this Premiere build happens to expose any, `undefined` otherwise (no worse than before) |
+
+**Still broken, no fix found yet:**
 
 | Tool | Issue | Use instead |
 |------|-------|--------------|
-| `clip_insert` | Fails on this Premiere build (`SequenceEditor` insert action rejected); falls back to creating a *new* sequence from the media rather than inserting into yours | `clip_overwrite` on an existing sequence |
-| `marker_add` | Native marker creation fails; falls back to a "virtual marker" stored in Sequence Properties — readable by `marker_list`/`marker_go_to`, but does **not** show up in Premiere's own marker track | Known limitation for now — track marker intent yourself if you need a visible Premiere marker |
-| `text_set_content` (edit *existing* text) | Only reliable with the optional CEP Text Bridge connected, on an After-Effects-authored MOGRT. Without CEP, the pure-UXP path is rejected by Premiere (`Illegal Parameter type` on the MOGRT `Text` property) | `text_write` / `text_add` for placing new text — it always succeeds via a guaranteed PNG fallback, even without CEP |
-| `shape_set_size` | The bundled shape template never exposed a real pixel-size property; always approximates size via a single uniform Motion Scale %, not independent width/height | Fine for "bigger/smaller"; don't rely on it for exact pixel dimensions |
+| `track_add_video` / `track_add_audio` | Fails on this Premiere build (`"No UXP method to add audio track"`) — you're stuck with the track count the sequence preset started with | Plan track count upfront via `sequence_create`/a preset with enough tracks; can't add more later |
 
-We'd rather list four honest gaps than quietly ship them as working. This table gets updated as the underlying Premiere/UXP API changes.
+**Lower-confidence claims (from earlier static code analysis, not re-verified in this session):** `text_set_content` (editing existing MOGRT text) and `shape_set_size` (exact pixel sizing) were previously found broken via code-level probes — see [docs/FEATURES.md](./docs/FEATURES.md) for the detail — but given `clip_insert` turned out to be more fixed than that same style of analysis suggested, treat these as "worth re-checking live," not gospel.
+
+**Also found and fixed: a fade/keyframe ordering footgun, not a bug.** `workflow_audio_fade`/`workflow_fade_clip` calculate fade keyframes from the clip's *current* start/end at the moment you call them — correct in isolation, but if you trim the clip's length *after* adding fades, the old fade-out keyframe can end up past the new out-point and silently stop applying (fade-in still works, fade-out doesn't). Both tools' descriptions now explicitly warn the model to trim to final length first.
+
+This section gets updated as real Premiere sessions surface more ground truth — static code analysis alone has already been wrong once here (`clip_insert`).
 
 ---
 

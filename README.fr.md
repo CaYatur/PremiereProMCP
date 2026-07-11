@@ -71,6 +71,6 @@ claude mcp add premiere-pro -- "C:\Users\Vous\AppData\Local\PPMCP\node\node.exe"
 
 ## Etat des outils
 
-~225 outils MCP ; la plupart sont type-verified (correspondent a une methode reelle de l'API Adobe, mais pas encore toutes testees en direct). Quatre problemes connus avec une vraie solution : `clip_insert`, `marker_add`, `text_set_content` (editer un texte existant), et `shape_set_size` — details et alternatives dans le **[README anglais](./README.md#tool-status-whats-actually-tested)** ou [docs/FEATURES.md](./docs/FEATURES.md).
+~225 outils MCP ; la plupart sont type-verified (correspondent a une methode reelle de l'API Adobe, mais pas encore toutes testees en direct). Des tests reels recents ont deja trouve plusieurs problemes confirmes (avec solution de contournement) et corrige une hypothese precedente — tableau detaille et a jour dans le **[README anglais](./README.md#tool-status-whats-actually-tested)** ou [docs/FEATURES.md](./docs/FEATURES.md).
 
 Details : **[INSTALL.md](./INSTALL.md)** · fonctions dans le README anglais.

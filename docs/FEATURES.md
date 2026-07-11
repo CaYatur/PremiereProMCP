@@ -20,55 +20,80 @@
 > at all, so a failure partway through doesn't leave the timeline in a
 > half-edited state.
 >
-> **Four specific, confirmed issues from real-app testing — not vague
-> uncertainty, and each has a concrete fallback or workaround today:**
-> 1. **`text_set_content`** (edit text on an *existing* graphic) — only
->    reliable when the optional **CEP Text Bridge** is installed and
->    connected *and* the graphic is an After-Effects-authored MOGRT capsule.
->    Without CEP, it falls through to a pure-UXP path that Premiere itself
->    rejects: `ComponentParam.createKeyframe()` throws `"Illegal Parameter
->    type"` for the MOGRT `"Text"` master property, contradicting its own
->    published type declarations (confirmed with an isolated diagnostic
->    probe, `plugin/src/handlers/debug.js` — `getStartValue()`/
->    `getKeyframePtr()` both return `null` for this param, unlike the
->    sibling `Position` param on the same clip, which works fine). **If you
->    just need text on screen (not re-editing existing text), use
->    `text_write`/`text_add` instead** — it's a resilient multi-path tool
->    (UXP → CEP → PNG) with a guaranteed final PNG fallback, so it always
->    produces visible text even with no CEP bridge running.
-> 2. **`shape_set_size`** — the bundled shape MOGRT never exposed a real
->    `Size` master property (an authoring-time gap, not a UXP bug), so this
->    tool *always* falls back to approximating size via a single uniform
->    Motion **Scale %** (averaged from the requested width/height against a
->    400×200 design size) rather than setting exact independent pixel
->    dimensions. Fine for "make it bigger/smaller," not for an exact W×H.
-> 3. **`clip_insert`** — `SequenceEditor.createInsertProjectItemAction()`
->    fails with a generic `"Script action failed to execute"` on this
->    Premiere build. The tool catches this and **creates a brand-new
->    sequence containing just that clip** instead of inserting into the
->    sequence/track/time you asked for (open it with `sequence_set_active`).
->    **If you want the clip on an existing sequence, use `clip_overwrite`**
->    (confirmed working) instead of `clip_insert`.
-> 4. **`marker_add`** — `Markers.createAddMarkerAction()` fails with the
->    same generic error on this build. The tool falls back to a **"virtual
->    marker"** written into Sequence Properties (`plugin/src/handlers/
->    virtualMarkers.js`) so `marker_list`/`marker_go_to` still work — but
->    it is **not a real Premiere timeline marker**; it won't show up in
->    Premiere's own marker UI/track.
+> **Correction (2026-07-11, after a real end-to-end editing session):**
+> the paragraph below previously claimed `clip_insert` was confirmed broken
+> on this Premiere build. That was wrong — it was based on an earlier,
+> simpler implementation and a static-code read, not a fresh live test.
+> The current `clip.js` retries ~10 internal variants (item cast, 5
+> limitShift/audio-index combos) before giving up, and in a real session
+> building a ~48s multi-track sequence, `clip_insert` **succeeded on every
+> one of ~19 video/audio clip placements** via one of those variants
+> (`"via": "insert-raw"` in the response). `marker_add` has the same style
+> of retry (5 marker-type × 3 duration combos) and added 7 markers with no
+> reported error in the same session — though we can't yet tell from that
+> alone whether it went through the native path or the virtual-marker
+> fallback (both return the same success shape). **Lesson: don't trust a
+> "confirmed broken" claim that isn't backed by a live test against the
+> current code** — the retry hardening below can silently fix what an
+> earlier probe found broken.
 >
->    Both #3 and #4 throw the identical generic error from
->    `CompoundAction#addAction()` itself, confirmed via instrumentation in
->    `plugin/src/ppro.js#runTransaction` — every action sourced from a
->    `TrackItem`/`ComponentParam` directly (trim/roll/slip/slide, shape
->    position/color) works; only actions sourced from a "collection-level"
->    factory (`SequenceEditor`/`Markers`) hit this. Revisit if a future
->    Premiere/`@adobe/premierepro` release changes this.
+> **Confirmed broken in that same real session — three of the four fixed
+> in code since, pending a live re-test:**
+> 1. **`clip_append`** — failed consistently with `"Script action failed to
+>    execute"` because it used one fixed attempt instead of `clip_insert`'s
+>    retry logic. **Fixed:** both now share the same ~10-variant retry via
+>    one helper (`insertProjectItemWithRetry` in `plugin/src/handlers/
+>    clip.js`) — anything that made `clip_insert` succeed should now make
+>    `clip_append` succeed too.
+> 2. **`track_add_video` / `track_add_audio`** — fail on this Premiere
+>    build (`"No UXP method to add audio track"`). **Not fixed** — no
+>    plausible alternate method was found to try (unlike #3 below, there's
+>    no established Action-factory pattern for this in the codebase to
+>    fall back to). You're limited to whatever track count the
+>    sequence/preset started with; plan track count upfront via
+>    `sequence_create`/a preset.
+> 3. **`sequence_set_in_out`** — completely missing from this Premiere
+>    build's UXP API (`"sequence.setInPoint is not a function"`), not a
+>    partial failure. **Hardened:** now also tries the `SequenceEditor`
+>    Action-factory pattern (`createSetInPointAction`/
+>    `createSetOutPointAction`) every other mutation in this codebase uses,
+>    feature-detected so it's a no-op if that method doesn't exist either —
+>    unverified whether it actually exists on this build.
+> 4. **`media_get_info` / `media_analyze_file_info`** — never returned
+>    duration, resolution, or frame rate; `ClipProjectItem` only exposes
+>    path/proxy/offline-style fields via UXP (see `plugin/src/handlers/
+>    media.js`'s own header comment — this was researched, not
+>    overlooked). **Hardened:** now opportunistically probes `getDuration`,
+>    `getFrameSize`, `width`/`height`, `getFrameRate`, feature-detected —
+>    returns them if this build happens to expose any, `undefined`
+>    otherwise (no worse than before). Workaround either way: shell out to
+>    `ffprobe` on the source file path.
+>
+> **Lower-confidence, not re-verified this round:** `text_set_content`
+> (editing an *existing* graphic's text — only reliable with the optional
+> CEP Text Bridge connected to an AE-authored MOGRT, otherwise the pure-UXP
+> path throws `"Illegal Parameter type"` on the MOGRT `Text` property; use
+> `text_write`/`text_add` instead for placing new text, which always
+> succeeds via a guaranteed PNG fallback) and `shape_set_size` (the bundled
+> shape MOGRT never exposed a real `Size` master property, so it falls back
+> to a single uniform Motion Scale % approximation, not independent
+> width/height) — both are carried over from an earlier code-level probe.
+> Given `clip_insert` turned out better than that same style of analysis
+> suggested, treat these two as "worth a fresh live check," not settled.
+>
+> **Also found and fixed: a fade/keyframe ordering footgun, not a tool
+> bug.** `workflow_audio_fade`/`workflow_fade_clip` read the clip's
+> *current* start/end at call time — correct in isolation, but if you trim
+> the clip's length *after* adding fades, the old fade-out keyframe can end
+> up past the new out-point and silently stop applying (fade-in still
+> works, fade-out doesn't). Both tools' descriptions now explicitly warn
+> the model to trim to final length before adding fades.
 >
 > **Everything else exercised in this testing pass** — connect/reconnect,
 > reading project/sequence state, creating sequences, listing tracks,
 > `clip_overwrite`/trim/roll/slip/slide, shape add + position + fill color,
-> `text_write`'s PNG path, listing markers/effects/transitions, and
-> `project_import_media` — worked as documented.
+> `text_write`'s PNG path, gain/dB control, listing effects/transitions,
+> and `project_save`/`sequence_screenshot` — worked as documented.
 >
 > See `docs/ARCHITECTURE.md` §2.4 for the Text gap's full detail. The
 > remaining categories below (multicam, proxy/media, analysis, batch, most
@@ -269,30 +294,34 @@ and `project.getRootItem()` against a real, open project.
 `project_find_offline_media`, `project_get_settings`,
 `project_set_settings`, `project_get_selection`, `project_consolidate`
 
-### B. Sequence Management — `sequence_*` (17)
-The live probe result is inconclusive here, not confirming: `getActiveSequence()`
-was called successfully (no error), but the returned object's downstream
-reads (`getVideoTrackCount`, etc.) never populated — the test project most
-likely had no sequence open/active at probe time, so the call path is
-**untested**, not proven working *or* broken. **This — an actual open
-sequence with clips on it — is the first thing Phase 1 must live-test; the
-whole `clip_*`/`track_*`/`sequence_*` "edit quality" core was not exercised
-by this probe.**
-`sequence_create`, `sequence_create_from_preset`, `sequence_list`,
-`sequence_get_active`, `sequence_set_active`, `sequence_duplicate`,
-`sequence_delete`, `sequence_get_settings`, `sequence_set_settings`,
-`sequence_nest`, `sequence_get_duration`, `sequence_get_tracks`,
-`sequence_rename`, `sequence_close`, `sequence_zoom_to_fit`,
-`sequence_get_render_bar_status`, `sequence_export_frame`
+### B. Sequence Management — `sequence_*` (12)
+**Note: real shipped tool names, corrected 2026-07-11** — the previous
+catalog listed several planning-era names (`sequence_create_from_preset`,
+`sequence_duplicate`, `sequence_nest`, `sequence_rename`,
+`sequence_zoom_to_fit`, `sequence_get_render_bar_status`) that were never
+implemented under those names. Real list, real tags:
+`sequence_create` ✅, `sequence_get_active`, `sequence_list`,
+`sequence_set_active`, `sequence_get_settings`,
+`sequence_set_in_out` ❔ (confirmed broken in a real session — `"sequence.setInPoint is not a function"`; hardened 2026-07-11 with an additional `SequenceEditor` Action-factory fallback attempt, unverified whether it actually fixes it on this build),
+`sequence_delete`, `sequence_close`,
+`sequence_create_from_media` (the fallback destination when `clip_insert` truly can't insert — see §D), `sequence_get_duration`, `sequence_get_tracks`,
+`sequence_export_frame`
 
-### C. Track Operations — `track_*` (11)
-`track_add_video`, `track_add_audio`, `track_remove`, `track_rename`,
-`track_set_enabled`, `track_set_locked`, `track_set_muted`,
-`track_set_solo`, `track_set_height`, `track_set_target`,
-`track_get_items`
+### C. Track Operations — `track_*` (10)
+**Note: real shipped tool names, corrected 2026-07-11** — the previous
+catalog's `track_remove`/`track_set_enabled`/`track_set_locked`/
+`track_set_muted`/`track_set_solo`/`track_set_height`/`track_set_target`
+don't match what shipped. Real list, real tags:
+`track_list`, `track_add`, `track_delete`, `track_set_mute`,
+`track_set_lock`, `track_set_output_enabled`, `track_rename`,
+`track_get_items`,
+`track_add_video` ❔, `track_add_audio` ❔ (both confirmed broken in a real
+session — `"No UXP method to add audio track"` — you're limited to the
+track count the sequence/preset started with; no workaround to add more
+tracks after creation yet)
 
 ### D. Clip / TrackItem Editing — `clip_*` (33) — the "edit quality" core
-`clip_insert` ❔ (confirmed broken on this Premiere build — falls back to creating a new sequence from the media instead of inserting; use `clip_overwrite`), `clip_overwrite` ✅, `clip_append`, `clip_ripple_delete`,
+`clip_insert` ✅ (live-confirmed on ~19 clips in a real session via internal multi-variant retry — see status callout above; can be slow due to the retry loop), `clip_overwrite` ✅, `clip_append` (was confirmed broken — `"Script action failed to execute"` — now shares `clip_insert`'s retry logic via one helper as of 2026-07-11, pending live re-test), `clip_ripple_delete`,
 `clip_lift`, `clip_extract`, `clip_trim_in`, `clip_trim_out`,
 `clip_roll_edit` ⚠, `clip_slip` ⚠, `clip_slide` ⚠, `clip_move`,
 `clip_duplicate`, `clip_split`, `clip_split_at_playhead`, `clip_delete`,
@@ -451,7 +480,7 @@ Scale % approximation, not independent width/height in pixels),
 `caption_create_track` ❔
 
 ### J. Markers & Metadata — `marker_*`, `metadata_*` (12)
-`marker_add` ❔ (confirmed broken on this Premiere build — native marker creation fails, falls back to a "virtual marker" in Sequence Properties that `marker_list`/`marker_go_to` can read but does not appear in Premiere's own marker UI), `marker_remove`, `marker_list` ✅, `marker_set_color`,
+`marker_add` (added 7 markers with no error in a real session via the same multi-variant retry as `clip_insert` — unconfirmed whether that went through the native path or the virtual-marker Sequence-Properties fallback, since both return the same success shape; if it's the fallback, markers won't appear in Premiere's own marker UI), `marker_remove`, `marker_list` ✅, `marker_set_color`,
 `marker_set_type`, `marker_set_duration`, `marker_go_to`,
 `metadata_get_clip`, `metadata_set_clip`, `metadata_get_xmp`,
 `metadata_set_xmp`, `metadata_batch_tag`
@@ -465,15 +494,21 @@ today; a strong Phase 0 candidate for "cut from v1, revisit later."
 `multicam_create_sequence` ❔, `multicam_sync_by_audio` ❔,
 `multicam_sync_by_timecode` ❔, `multicam_switch_angle` ❔, `multicam_flatten` ❔
 
-### L. Proxy & Media Management — `proxy_*`, `media_*` (9)
+### L. Proxy & Media Management — `proxy_*`, `media_*` (10)
+**Note: real shipped tool names, corrected 2026-07-11** — the previous
+catalog omitted `media_get_info` entirely and listed `proxy_create`/
+`proxy_toggle_playback_resolution`/`media_get_ingest_settings`/
+`media_set_ingest_settings`, none of which match what shipped.
 `ClipProjectItem.canProxy()/getProxyPath()/hasProxy()/attachProxy()` are
-confirmed. Proxy *creation* (transcoding new proxy media) is not a
-`ProjectItem` method — it would route through `EncoderManager`, unconfirmed
-without a deeper read of that section.
-`proxy_create` ❔, `proxy_attach`, `proxy_toggle_playback_resolution`,
-`media_go_offline`, `media_go_online`, `media_browser_search`,
-`media_get_ingest_settings`, `media_set_ingest_settings`,
-`media_analyze_file_info`
+confirmed. Real list, real tags:
+`media_get_info` ❔ (never returned duration/resolution/frame rate — only
+path/proxy/offline-style fields; hardened 2026-07-11 with opportunistic,
+feature-detected probes for `getDuration`/`getFrameSize`/`width`/`height`/
+`getFrameRate`, unverified whether any exist on this build), `proxy_attach`,
+`media_go_offline`, `media_relink`, `media_refresh`, `media_rename`,
+`media_find_by_path`, `media_go_online`,
+`media_analyze_file_info` ❔ (same gap/hardening as `media_get_info`),
+`media_browser_search`
 
 ### M. Export & Rendering — `export_*`, `render_*` (12)
 `export_with_preset`, `export_custom_settings`,

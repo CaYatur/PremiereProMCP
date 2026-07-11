@@ -71,6 +71,6 @@ claude mcp add premiere-pro -- "C:\Users\あなた\AppData\Local\PPMCP\node\node
 
 ## ツールの状態
 
-約225個の MCP ツール。ほとんどは type-verified（Adobe API の実メソッドに対応するが、まだ実機で全て検証済みではない）。実際のワークアラウンドがある既知の問題が4つ: `clip_insert`、`marker_add`、`text_set_content`（既存テキストの編集）、`shape_set_size`。詳細と代替手段は **[English README](./README.md#tool-status-whats-actually-tested)** または [docs/FEATURES.md](./docs/FEATURES.md) を参照。
+約225個の MCP ツール。ほとんどは type-verified（Adobe API の実メソッドに対応するが、まだ実機で全て検証済みではない）。最近の実機テストで確認済みの問題（回避策あり）がいくつか見つかり、以前の想定も一部訂正されました。最新の詳細な表は **[English README](./README.md#tool-status-whats-actually-tested)** または [docs/FEATURES.md](./docs/FEATURES.md) を参照。
 
 詳細は **[INSTALL.md](./INSTALL.md)** と English README。

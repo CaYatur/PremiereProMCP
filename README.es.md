@@ -71,6 +71,6 @@ claude mcp add premiere-pro -- "C:\Users\Tu\AppData\Local\PPMCP\node\node.exe" "
 
 ## Estado de las herramientas
 
-~225 herramientas MCP; la mayoria estan type-verified (mapean a un metodo real de la API de Adobe pero no todas se han probado en vivo aun). Cuatro problemas conocidos con solucion real: `clip_insert`, `marker_add`, `text_set_content` (editar texto existente), y `shape_set_size` — ver la tabla detallada y las alternativas en el **[English README](./README.md#tool-status-whats-actually-tested)** o en [docs/FEATURES.md](./docs/FEATURES.md).
+~225 herramientas MCP; la mayoria estan type-verified (mapean a un metodo real de la API de Adobe pero no todas se han probado en vivo aun). Pruebas reales recientes ya encontraron varios problemas confirmados (con solucion) y corrigieron una suposicion anterior — ver la tabla detallada, actualizada, en el **[English README](./README.md#tool-status-whats-actually-tested)** o en [docs/FEATURES.md](./docs/FEATURES.md).
 
 Details: **[INSTALL.md](./INSTALL.md)** · English README for full features.

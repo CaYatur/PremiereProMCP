@@ -1,4 +1,4 @@
-const { ppro, apiError, getActiveProject, getSequence, sequenceIdOf, getTrackCount } = require("../ppro.js");
+const { ppro, apiError, getActiveProject, getSequence, sequenceIdOf, getTrackCount, getEditor, runTransaction } = require("../ppro.js");
 
 async function sequenceSummary(sequence) {
   return {
@@ -118,15 +118,61 @@ module.exports = {
   },
 
   "sequence.setInOut": async ({ sequenceId, inTicks, outTicks }) => {
+    // Hardened 2026-07-11: a real session confirmed sequence.setInPoint is
+    // not a function on this build's Sequence instance. Feature-detect a
+    // few plausible locations for the same capability (direct instance
+    // method, or an Action-factory pair on SequenceEditor, matching the
+    // pattern every other mutation in this file uses) before giving up.
+    // Each attempt is typeof-guarded, so a missing method is a no-op, not
+    // a crash — safe to try even where we can't verify live.
     const project = await getActiveProject();
     const sequence = await getSequence(project, sequenceId);
+    let editor = null;
     try {
-      if (inTicks !== undefined) await sequence.setInPoint(ppro.TickTime.createWithTicks(String(inTicks)));
-      if (outTicks !== undefined) await sequence.setOutPoint(ppro.TickTime.createWithTicks(String(outTicks)));
-      return { updated: true };
-    } catch (err) {
-      throw apiError("sequence.setInOut", err);
+      editor = await getEditor(sequence);
+    } catch {
+      editor = null;
     }
+    const errors = [];
+
+    async function trySet(kind, ticks) {
+      if (ticks === undefined) return true;
+      const time = ppro.TickTime.createWithTicks(String(ticks));
+      const directMethod = kind === "in" ? "setInPoint" : "setOutPoint";
+      const actionMethod = kind === "in" ? "createSetInPointAction" : "createSetOutPointAction";
+      if (typeof sequence[directMethod] === "function") {
+        try {
+          await sequence[directMethod](time);
+          return true;
+        } catch (err) {
+          errors.push(`sequence.${directMethod}: ${err && err.message ? err.message : err}`);
+        }
+      }
+      if (editor && typeof editor[actionMethod] === "function") {
+        try {
+          runTransaction(project, `PPMCP sequence_set_in_out ${kind}`, (compoundAction) => {
+            const action = editor[actionMethod](time);
+            if (!action) throw new Error(`${actionMethod} returned null`);
+            const ok = compoundAction.addAction(action);
+            if (ok === false) throw new Error("addAction returned false");
+          });
+          return true;
+        } catch (err) {
+          errors.push(`editor.${actionMethod}: ${err && err.message ? err.message : err}`);
+        }
+      }
+      return false;
+    }
+
+    const inOk = await trySet("in", inTicks);
+    const outOk = await trySet("out", outTicks);
+    if (inOk && outOk) return { updated: true };
+    throw apiError(
+      "sequence.setInOut",
+      new Error(
+        `${errors.join(" ;; ") || "no candidate method found"}. Not exposed via UXP Sequence/SequenceEditor on this Premiere build.`,
+      ),
+    );
   },
 
   "sequence.delete": async ({ sequenceId }) => {

@@ -32,6 +32,12 @@ async function clipInfo(clip) {
       return undefined;
     }
   };
+  // Duration/resolution/frame rate were never confirmed reachable on
+  // ClipProjectItem (see file header). These extra fields are opportunistic,
+  // zero-risk probes (safe() swallows "not a function" like everything
+  // else here) in case a build/version exposes any of them — no worse than
+  // the current "always undefined" if none exist.
+  const ticks = await safe(() => clip.getDuration && clip.getDuration());
   return {
     name: clip.name,
     mediaFilePath: await safe(() => clip.getMediaFilePath()),
@@ -43,6 +49,11 @@ async function clipInfo(clip) {
     isMergedClip: await safe(() => clip.isMergedClip()),
     isSequence: await safe(() => clip.isSequence()),
     canChangeMediaPath: await safe(() => clip.canChangeMediaPath()),
+    durationTicks: ticks && ticks.ticks !== undefined ? String(ticks.ticks) : await safe(() => clip.duration),
+    frameSize: await safe(() => clip.getFrameSize && clip.getFrameSize()),
+    width: await safe(() => clip.width),
+    height: await safe(() => clip.height),
+    frameRate: await safe(() => clip.getFrameRate && clip.getFrameRate()),
   };
 }
 
