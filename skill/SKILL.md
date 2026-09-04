@@ -5,19 +5,19 @@ description: Quality-first automatic Premiere editing for weak and strong models
 
 # PPMCP agent skill — automatic systems over tool count
 
-## Quality bar (beat competitors)
+## Quality bar
 
-Competitors often ship 200–278 atomic tools with weak text, thrash retries, and no delivery pass. **We optimize for cut quality + automatic packs:**
+A long chain of atomic calls is not a better cut than one playbook that already
+knows the professional defaults. **Optimize for cut quality, not call count:**
 
-| Capability | PPMCP | Typical CEP MCP |
-|------------|-------|-----------------|
-| Automatic edit | `edit_auto` + playbooks | Manual 15–40 tool chains |
-| Editable titles | CEP + AE Basic Text | Often missing |
-| Delivery polish | `quality_pass` / `edit_delivery` | Manual multi-tool |
-| QA gate | `edit_verify` | None |
-| Failures | `recovery` + continue plan | Model retry loops |
-| Token cost | playbooks + compact | Full catalog dump |
-| Architecture | UXP-native + optional text bridge | CEP-only (deprecating) |
+| Capability | Use |
+|------------|-----|
+| Automatic edit | `edit_auto` + playbooks — one call, complete structure |
+| Editable titles | text engine: UXP → hybrid → CEP → PNG fallback |
+| Delivery polish | `quality_pass` / `edit_delivery` — grade + transitions + fades |
+| QA gate | `edit_verify` before export |
+| Failures | `recovery` hint, then continue the plan |
+| Token cost | playbooks + `compact: true` + the `standard` tool profile |
 
 **Never sacrifice quality for “one more atomic tool.”** Prefer automatic playbooks that already include grade + transitions + fades (+ normalize).
 
@@ -215,8 +215,51 @@ checkpoint_list
 Stored under `~/.ppmcp/checkpoints/`. Call **before** mass edits.
 
 
+## Your tool list is a starting point — you can extend it yourself
+
+All 277 tools are loaded. The session *registers* a profile (default
+`standard` = 109) only to keep your tool list small. **A tool you cannot see
+is not missing, and you do not need the user's permission to get it.**
+
+**One-off call** — cheapest, works regardless of client:
+
+```
+tool_search { query: "warp stabilizer" }      // find the exact name
+tool_schema { name: "effect_apply_warp_stabilizer" }   // see its params
+tool_invoke { name: "effect_apply_warp_stabilizer", args: { trackIndex: 1, clipIndex: 0 } }
+```
+
+**Register it for real** — when you expect to use that area repeatedly, or
+the job is complex and varied enough that you want everything visible:
+
+```
+tool_profile { category: "color" }    // register one area, additive
+tool_profile { enable: ["clip_reverse", "media_relink"] }  // specific tools
+tool_profile { profile: "full" }      // register all 277 — take it if you want it
+tool_profile { }                      // just report the current state
+```
+
+The tools then appear in your own tool list (the server emits
+`tools/list_changed`). If your client does not refresh, `tool_invoke` still
+works — it never depends on registration.
+
+**When to take the whole catalog.** `profile: "full"` costs tokens on every
+later turn, so it is not free — but if you are doing varied work and keep
+hitting tools you cannot see, take it. One `tool_profile` call beats ten
+`tool_invoke` round-trips. Shrink back with `tool_profile { profile: "core" }`
+when the exploratory phase is over (naming a profile also clears anything you
+pinned earlier).
+
+**Never tell the user a capability is unsupported before running
+`tool_search`.** `tool_search`, `tool_schema` and `tool_profile` are exempt
+from the rate limiter, so orienting yourself costs no waiting.
+
+Operator-side: `PPMCP_PROFILE=core` (19) / `standard` (109, default) /
+`full` (277) sets only where the session *starts*.
+
 ## Token hygiene
 
 - `compact: true` default on orchestration tools  
 - One `edit_auto` > ten atomics  
 - Avoid dumping full effect catalogs unless needed  
+- Prefer `tool_search` / `tool_profile` over asking the user to change config  

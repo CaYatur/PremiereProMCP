@@ -1,6 +1,7 @@
 /**
- * High-value tools for agent UX / parity with larger CEP MCP catalogs.
- * Pure server orchestration of existing relay primitives where possible.
+ * Convenience tools: one call where the alternative is three or four.
+ * Pure server-side orchestration of existing relay primitives — no new plugin
+ * surface, so they carry the reliability of the primitives they compose.
  */
 import { z } from "zod";
 import { defineTool } from "../toolDefinition.js";
@@ -8,7 +9,7 @@ import { frameToTicks, goToFrame, resolveTimebase, ticksToSeconds } from "../tim
 
 const TICKS_PER_SECOND = 254016000000n;
 
-export const competitiveTools = [
+export const convenienceTools = [
   defineTool({
     name: "sequence_find_by_name",
     title: "Find sequences by name",

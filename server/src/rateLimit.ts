@@ -40,6 +40,14 @@ export const MAX_TOOLS_PER_MIN = envInt("PPMCP_MAX_TOOLS_PER_MIN", 400);
 export const MAX_HEAVY_PER_MIN = envInt("PPMCP_MAX_HEAVY_PER_MIN", 300);
 
 const LIGHT_TOOLS = new Set([
+  // Meta-tools never touch Premiere: tool_search and tool_schema read the
+  // in-process catalog, tool_profile only flips SDK registration flags. The
+  // 220 ms floor exists to stop edit spam from crashing the host, so applying
+  // it here would rate-limit a model purely for orienting itself.
+  // `tool_invoke` is deliberately NOT exempt — it runs a real tool.
+  "tool_search",
+  "tool_schema",
+  "tool_profile",
   "app_get_connection_status",
   "edit_bootstrap",
   "edit_help",

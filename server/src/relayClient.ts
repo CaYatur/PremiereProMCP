@@ -108,6 +108,13 @@ export class RelayClient {
   }
 
   private async trySpawnBridge(): Promise<void> {
+    // Opt-out for tests and sandboxes: PPMCP_NO_AUTOSPAWN=1 keeps this process
+    // from leaving a detached bridge behind. Tool calls then fail fast with
+    // PLUGIN_NOT_CONNECTED, which is what a no-Premiere test wants anyway.
+    if (process.env.PPMCP_NO_AUTOSPAWN === "1") {
+      console.error("[ppmcp-server] bridge auto-spawn disabled (PPMCP_NO_AUTOSPAWN=1).");
+      return;
+    }
     try {
       const here = path.dirname(fileURLToPath(import.meta.url));
       const bridgeEntry = path.resolve(here, "../../bridge/dist/index.js");

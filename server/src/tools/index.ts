@@ -17,7 +17,7 @@ import { mediaTools } from "./media.js";
 import { analyzeTools } from "./analyze.js";
 import { batchTools } from "./batch.js";
 import { visionTools } from "./vision.js";
-import { competitiveTools } from "./competitive.js";
+import { convenienceTools } from "./convenience.js";
 import { agentOrchestrationTools } from "./agentOrchestration.js";
 import { checkpointTools } from "./checkpoint.js";
 
@@ -47,5 +47,5 @@ export const allTools = [
   ...analyzeTools,
   ...batchTools,
   ...visionTools,
-  ...competitiveTools,
+  ...convenienceTools,
 ];

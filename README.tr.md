@@ -53,9 +53,21 @@ Ayrinti: **[INSTALL.md](./INSTALL.md)**
 
 ## MCP istemcini bagla
 
-PPMCP **lokal (yerel) bir stdio MCP sunucusu** — kendi PC'nde calisan bir Node islemi, AI istemcinle dogrudan konusur. **Uzak (remote) bir MCP baglayici degildir** — yani Claude'un Connectors ekranindaki *"Add custom connector" → Remote MCP server URL* akisi burada gecerli degil. Setup sonrasi tam yollarin zaten `HOW-TO-CONNECT.txt` / `mcp-config-snippet.json` icinde hazir.
+PPMCP **lokal bir stdio MCP sunucusu** — kendi PC'nde calisan bir Node islemi. AI istemcin onu bir alt-islem olarak baslatir ve stdin/stdout uzerinden konusur. Girilecek bir URL ya da port yok.
 
-**Claude Desktop** — Setup bunu `claude_desktop_config.json`'a otomatik ekler. Elle yapmak icin `"mcpServers"` objesine ekle:
+> [!WARNING]
+> Claude'un **Settings → Connectors → Add custom connector** ekrani *Remote MCP server URL* ister. O ekran barindirilan (hosted) sunuculara aittir ve PPMCP icin **calismaz**. Istemcinin kendi lokal config dosyasini (veya `claude mcp add`) kullan.
+
+Her istemci ayni iki degeri ister. Setup bunlari gercek yollarinla birlikte `%APPDATA%\PPMCP\HOW-TO-CONNECT.txt` ve `mcp-config-snippet.json` icine zaten yazdi:
+
+| Deger | Varsayilan |
+|-------|-----------|
+| `command` | `%LOCALAPPDATA%\PPMCP\node\node.exe` |
+| `args[0]` | `%LOCALAPPDATA%\PPMCP\server\dist\index.js` |
+
+> **Kacis karakteri:** `.json` dosyasinin icinde her ters bolu **cift** yazilmali (`C:\\Users\\SEN\\...`); komut satirinda ise tek. Baglanti hatalarinin en yaygin sebebi budur.
+
+**Claude Desktop** — Setup bunu senin icin yazar. Elle yapmak icin `%APPDATA%\Claude\claude_desktop_config.json` dosyasini ac (yoksa olustur), mevcut `"mcpServers"` objesine **ekle** (dosyanin tamamini degistirme), sonra uygulamayi **tamamen kapatip yeniden ac** — pencereyi kapatmak yetmez.
 
 ```json
 {
@@ -68,15 +80,65 @@ PPMCP **lokal (yerel) bir stdio MCP sunucusu** — kendi PC'nde calisan bir Node
 }
 ```
 
-**Claude Code** (CLI):
+**Claude Code** (CLI) — `--scope user` her projede kullanilabilir yapar; `claude mcp list` ile dogrula.
 
 ```bash
-claude mcp add premiere-pro -- "C:\Users\SEN\AppData\Local\PPMCP\node\node.exe" "C:\Users\SEN\AppData\Local\PPMCP\server\dist\index.js"
+claude mcp add premiere-pro --scope user -- "C:\Users\SEN\AppData\Local\PPMCP\node\node.exe" "C:\Users\SEN\AppData\Local\PPMCP\server\dist\index.js"
 ```
 
-**Cursor** — Settings → MCP → Add server (bu bir *lokal komut*, URL degil):
-- Command: yukaridaki Node yolu
-- Args: yukaridaki server yolu
+**Cursor** — Claude Desktop ile ayni JSON; `%USERPROFILE%\.cursor\mcp.json` (tum projeler) veya `.cursor\mcp.json` (sadece bu proje).
+
+**VS Code / GitHub Copilot agent modu** — farkli sekle sahip tek istemci: anahtar `mcpServers` degil **`servers`**, ve acikca `"type": "stdio"` ister. `.vscode/mcp.json` icine koy, ya da **MCP: Open User Configuration** komutunu calistir.
+
+```json
+{
+  "servers": {
+    "premiere-pro": {
+      "type": "stdio",
+      "command": "C:\\Users\\SEN\\AppData\\Local\\PPMCP\\node\\node.exe",
+      "args": ["C:\\Users\\SEN\\AppData\\Local\\PPMCP\\server\\dist\\index.js"]
+    }
+  }
+}
+```
+
+**Windsurf** — `%USERPROFILE%\.codeium\windsurf\mcp_config.json` (veya Cascade paneli → MCP ikonu → Configure), `mcpServers` sekli, sonra Windsurf'u yeniden yukle.
+
+**Diger tum MCP istemcileri** — Cline, Roo Code, Continue, Zed, LM Studio, JetBrains AI, Gemini CLI, Codex CLI veya kendi host'un: transport olarak **`stdio`** ver (bazi istemciler buna "local", "command" veya "process" der), komut olarak Node yolunu, tek argüman olarak da server yolunu. Neredeyse hepsi yukaridaki `mcpServers` seklini kullanir; VS Code'un `servers` + `"type": "stdio"` yapisi tek yaygin istisnadir. Sadece uzak URL alani sunan bir istemci PPMCP'yi calistiramaz.
+
+**Istemcisiz test** — bu komut bir baslangic satiri yazip beklemeli (durdurmak icin Ctrl+C). Yaziyorsa sunucu saglamdir, sorun istemci config'indedir:
+
+```bash
+"C:\Users\SEN\AppData\Local\PPMCP\node\node.exe" "C:\Users\SEN\AppData\Local\PPMCP\server\dist\index.js"
+```
+
+**Kaynaktan derliyorsan** (Setup ZIP yerine): `npm run build` calistir, komut olarak `node` (sistem Node 18+), argüman olarak da klonundaki `server/dist/index.js` mutlak yolunu ver.
+
+### Arac yuzeyi — tavan degil, baslangic noktasi
+
+277 aracin hepsi yuklu. **Profil** yalnizca oturum baslarken kacinin *kayitli* oldugunu belirler; cunku 277 semayi birden modelin onune koymak her oturumda binlerce token'a mal olur ve arac secimini olcelebilir sekilde kotulestirir.
+
+| `PPMCP_PROFILE` | Baslangicta kayitli | Ne zaman |
+|-----------------|---------------------|----------|
+| `core` | 19 | Kucuk/ucuz modeller; sadece `edit_bootstrap` → `edit_auto` → `edit_verify` |
+| `standard` *(varsayilan)* | 109 | Canli dogrulanmis araclar + gercek bir kurguda kullanilan atomikler |
+| `full` | 277 | Ilk turdan itibaren tum katalog acik, 1.0.x'teki gibi |
+
+**Model bunu oturum ortasinda kendisi genisletebilir.** Daha fazlasina ihtiyaci olduguna karar verirse `tool_profile` cagirir — yeniden baslatma yok, config duzenleme yok, sana sorma yok:
+
+```
+tool_profile { profile: "full" }     // 277 aracin hepsini kaydet
+tool_profile { category: "color" }   // tek bir alani kaydet, eklemeli
+tool_profile { enable: ["clip_reverse"] }
+```
+
+Sunucu araclari kaydedip `notifications/tools/list_changed` gonderir, istemcin kendi arac listesini tazeler. Ayrica `tool_search` kayitli olmayan araclari bulur, `tool_invoke` ise kayitli olsun olmasin her araci calistirir — yani hangi profili secersen sec hicbir sey erisilemez degildir.
+
+```json
+"env": { "PPMCP_PROFILE": "standard" }
+```
+
+Istemci bazinda tam anlatim ve sorun giderme tablosu: **[INSTALL.md](./INSTALL.md)**.
 
 ---
 
@@ -100,7 +162,7 @@ PPMCP, AI ajanini **calisan Premiere Pro**'ya baglayan bir MCP sunucusudur: seka
 
 ## Arac durumu: gercekte test edilen neler
 
-**277 MCP arac**, ~20 kategoride (project, sequence, track, clip, transition, effect — 52 tek-atislik ozel effect/audio/transition kisayolu dahil — color/Lumetri, audio, text/title/shape, marker/metadata, multicam, proxy/media, export, analysis, batch, selection/system, checkpoint, agent-orchestration/edit-pipeline, arti ~22 ust-seviye workflow arac). Bu araclarin cogu Adobe'nin kendi `@adobe/premierepro` UXP API'sindeki gercek, dokumante edilmis bir metoda karsilik geliyor. Gercek ucdan uca oturumlar artik asagidaki ~48s'lik duman testinden cok daha genis bir kismini calistirdi; su ana kadar cikan sorunlar asagida isaretlenenler ("Hala bozuk" ve "Dusuk guvenirlikli iddialar") — detayli arac-bazli dogrulama seviyesi icin [docs/FEATURES.md](./docs/FEATURES.md)'e bak.
+**277 MCP arac**, ~20 kategoride. 1.1.0'dan itibaren sunucu tum katalogu degil bir **profil** kaydediyor (varsayilan 109); geri kalani `tool_search` → `tool_schema` → `tool_invoke` ile tek cagri uzakta, `PPMCP_PROFILE=full` eski yuzeyi geri getiriyor. Katalog su kategorileri kapsiyor: project, sequence, track, clip, transition, effect — 52 tek-atislik ozel effect/audio/transition kisayolu dahil — color/Lumetri, audio, text/title/shape, marker/metadata, multicam, proxy/media, export, analysis, batch, selection/system, checkpoint, agent-orchestration/edit-pipeline, arti ~22 ust-seviye workflow arac). Bu araclarin cogu Adobe'nin kendi `@adobe/premierepro` UXP API'sindeki gercek, dokumante edilmis bir metoda karsilik geliyor. Gercek ucdan uca oturumlar artik asagidaki ~48s'lik duman testinden cok daha genis bir kismini calistirdi; su ana kadar cikan sorunlar asagida isaretlenenler ("Hala bozuk" ve "Dusuk guvenirlikli iddialar") — detayli arac-bazli dogrulama seviyesi icin [docs/FEATURES.md](./docs/FEATURES.md)'e bak.
 
 **Gercek, ucdan uca bir testte iyi calisan** (sifirdan kurulan ~48s'lik cok-track'li sequence: video + 4 audio track, transition, gain, keyframe'li fade, marker, title, screenshot, save): sequence/project olusturma, `clip_overwrite`, trim, roll/slip/slide, split, ripple delete, sekil ekleme + konum + dolgu rengi, `text_write`'in PNG fallback yolu, effect/transition listeleme, gain/dB kontrolu, project save/screenshot. **`clip_append` artik gercek bir oturumda calistigi dogrulandi** — klipleri dogru sirayla ekliyor (onceden `"Script action failed to execute"` ile basarisiz oluyordu; paylasimli-retry duzeltmesi canli olarak tuttu). **`sequence_set_in_out` de artik dogrulandi** (2026-07-11 yeniden test) — in/out noktalarini `"via": "sequence.createSetInPointAction + sequence.createSetOutPointAction"` ile set etti, 1.0.1'deki kok-neden duzeltmesini teyit etti (factory `SequenceEditor`'da degil, Sequence nesnesinde). Coklu adimli duzenlemeler (roll/slip/slide ve birlesik workflow araclari) Premiere'in `Project.executeTransaction()` mekanizmasi uzerinden tek atomik islem olarak commit ediliyor — yani islem yarida kesilirse timeline yarim-duzenlenmis halde kalmiyor. Bu transaction tasarimi eklentinin en guvenilir parcasi oldu.
 

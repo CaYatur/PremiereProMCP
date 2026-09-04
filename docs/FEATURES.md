@@ -132,7 +132,7 @@ transitions all map to real, documented methods. **That core — the actual
 "edit quality" claim — is solid.**
 
 The same pass also *specifically checked* the creative/analysis surface the
-first competitor research flagged as risky, and found real gaps: **no
+first research pass flagged as risky, and found real gaps: **no
 dedicated Lumetri/color API, no waveform/scope data readout, no
 auto-transcription trigger (only transcript JSON import/export), no
 freeform text/title creation (MOGRT insert only), no Essential-Sound preset
@@ -143,9 +143,8 @@ this list stops overclaiming category by category instead of at the end.
 Last updated: 2026-07-10
 
 Total: **~219 tools** across 16 categories, plus a small set of high-level
-workflow tools. This comfortably clears the 150+ bar while staying short of
-the "1,000+ tools" competitor claims — the bet here is documented breadth
-and reliability beats padded count (see PLAN.md §2).
+workflow tools. Breadth is not the bet — documented, verified reliability is
+(see PLAN.md §2).
 
 ## 1. Design principles
 
@@ -191,9 +190,8 @@ correctly."
    without that state cluttering the tool list itself.
 7. **A shipped usage guide.** Ship a skill/prompt-resource document with
    common workflows worked out end-to-end (rough cut → trim → color →
-   captions → export), mirroring what `lordhoell/davinci-resolve-mcp` does
-   with its Claude Code skill. This is what teaches a model to *chain*
-   tools well, not just call them individually.
+   captions → export). This is what teaches a model to *chain* tools well,
+   not just call them individually.
 
 **Verification legend** (applied per tool below):
 - *(no tag)* — **Type-verified.** Maps to a specific method read directly in
@@ -575,11 +573,8 @@ a thin API wrapper. Treat these as real engineering work, not a quick win.
 `workspace_set_layout`, `app_get_version` ❔ (was `null` — read `version` off the `Application` class, but it's an *instance* property; fix applied 1.0.2, pending re-test — now reads `require("uxp").host.version`, returns `{ version, host, uxpVersion }`), `app_get_connection_status`
 
 ### Q. Dedicated common effect/transition shortcuts — `effect_apply_*`, `audio_apply_*`, `transition_add_*` (41)
-Added 2026-07-10, directly in response to the competitive tool-count
-question: competitors claim 170–1,027 tools (PLAN.md §2); our core
-categories land at 234, below two named competitors (269, 278). Rather
-than pad the count with speculative/duplicate tools, this category adds
-**41 genuinely low-risk, evidence-backed tools** — one dedicated
+Added 2026-07-10. Rather than pad the catalog with speculative or duplicate
+tools, this category adds **41 genuinely low-risk, evidence-backed tools** — one dedicated
 convenience tool per commonly-needed effect/transition, each targeting a
 matchname/display-name the live probe *actually enumerated* as present
 (§1's live probe results). All 🔧 (mechanism proven, this specific
@@ -627,12 +622,10 @@ matchname the way `effect_add(matchName: "...")` would require.
 plus the ~12 workflow tools in §2 (incl. the newly-added `shape_*` gap
 tools and chroma-key/PIP workflows) → **~275 tools at v1 target — honest
 breakdown by verification tag, updated 2026-07-10 with real live-probe
-results from a running Premiere Pro 2026 instance. IMPORTANT: this is still
-a specification — 0 of these 275 exist as working code today; see the
-status note above §1.** This clears both named competitors previously
-ahead of us on raw count (269, 278) without padding — every one of the 41
-new tools targets a specific effect/transition the live probe actually
-found present, not a guess.
+results from a running Premiere Pro 2026 instance.** Shipped as 277 tools in
+v1.0.x — see the status banner above §1 for what is verified today. Every one
+of the 41 dedicated shortcuts targets a specific effect/transition the live
+probe actually found present, not a guess.
 
 | Tag | Count (approx.) | Meaning |
 |---|---|---|
