@@ -132,16 +132,54 @@ if (-not $SkipNodeDownload) {
   $zipName = "node-v$NodeVersion-win-x64.zip"
   $url = "https://nodejs.org/dist/v$NodeVersion/$zipName"
   $zipPath = Join-Path $env:TEMP $zipName
-  if (-not (Test-Path $zipPath)) {
-    Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
+  $partPath = "$zipPath.part"
+
+  # A cached zip is only trustworthy if it opens. A build killed mid-download
+  # used to leave a truncated file here that every later run then reused,
+  # failing at extraction with an unhelpful error.
+  $haveZip = $false
+  if (Test-Path $zipPath) {
+    try {
+      Add-Type -AssemblyName System.IO.Compression.FileSystem
+      $probe = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+      $probe.Dispose()
+      $haveZip = $true
+      Write-Host "  Using cached $zipName" -ForegroundColor Gray
+    } catch {
+      Write-Host "  Cached $zipName is corrupt or truncated - re-downloading" -ForegroundColor Yellow
+      Remove-Item $zipPath -Force
+    }
   }
+
+  if (-not $haveZip) {
+    # Invoke-WebRequest renders a progress bar per chunk in Windows
+    # PowerShell 5.1, which dominates runtime on a ~28 MB file - it is the
+    # difference between seconds and many minutes. Download to .part and
+    # rename only on success, so an interrupted run never poisons the cache.
+    if (Test-Path $partPath) { Remove-Item $partPath -Force }
+    $prevProgress = $ProgressPreference
+    $ProgressPreference = 'SilentlyContinue'
+    try {
+      Invoke-WebRequest -Uri $url -OutFile $partPath -UseBasicParsing
+      Move-Item $partPath $zipPath -Force
+    } finally {
+      $ProgressPreference = $prevProgress
+      if (Test-Path $partPath) { Remove-Item $partPath -Force }
+    }
+  }
+
   $extract = Join-Path $env:TEMP "node-v$NodeVersion-win-x64"
   if (Test-Path $extract) { Remove-Item $extract -Recurse -Force }
-  Expand-Archive -Path $zipPath -DestinationPath $env:TEMP -Force
+  # .NET extraction rather than Expand-Archive - same reason as the ZIP
+  # packing step below.
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+  [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $env:TEMP)
   if (Test-Path $NodeDir) { Remove-Item $NodeDir -Recurse -Force }
   Move-Item $extract $NodeDir
   Write-Ok "Node at $NodeDir"
 } else {
+  # Note: the payload directory is wiped earlier in this script, so
+  # -SkipNodeDownload only works if you restore payload\node yourself first.
   Write-Host "  Skipping Node download (payload must already contain node\)" -ForegroundColor Yellow
 }
 
