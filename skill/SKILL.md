@@ -5,19 +5,19 @@ description: Quality-first automatic Premiere editing for weak and strong models
 
 # PPMCP agent skill — automatic systems over tool count
 
-## Quality bar (beat competitors)
+## Quality bar
 
-Competitors often ship 200–278 atomic tools with weak text, thrash retries, and no delivery pass. **We optimize for cut quality + automatic packs:**
+A long chain of atomic calls is not a better cut than one playbook that already
+knows the professional defaults. **Optimize for cut quality, not call count:**
 
-| Capability | PPMCP | Typical CEP MCP |
-|------------|-------|-----------------|
-| Automatic edit | `edit_auto` + playbooks | Manual 15–40 tool chains |
-| Editable titles | CEP + AE Basic Text | Often missing |
-| Delivery polish | `quality_pass` / `edit_delivery` | Manual multi-tool |
-| QA gate | `edit_verify` | None |
-| Failures | `recovery` + continue plan | Model retry loops |
-| Token cost | playbooks + compact | Full catalog dump |
-| Architecture | UXP-native + optional text bridge | CEP-only (deprecating) |
+| Capability | Use |
+|------------|-----|
+| Automatic edit | `edit_auto` + playbooks — one call, complete structure |
+| Editable titles | text engine: UXP → hybrid → CEP → PNG fallback |
+| Delivery polish | `quality_pass` / `edit_delivery` — grade + transitions + fades |
+| QA gate | `edit_verify` before export |
+| Failures | `recovery` hint, then continue the plan |
+| Token cost | playbooks + `compact: true` + the `standard` tool profile |
 
 **Never sacrifice quality for “one more atomic tool.”** Prefer automatic playbooks that already include grade + transitions + fades (+ normalize).
 
@@ -215,8 +215,28 @@ checkpoint_list
 Stored under `~/.ppmcp/checkpoints/`. Call **before** mass edits.
 
 
+## Tool profiles — a tool you cannot see is still callable
+
+The server registers a **profile**, not the whole catalog (277 tools). The
+default `standard` profile registers 109. If the tool you want is not in your
+tool list, **it is not missing** — reach it in three steps:
+
+```
+tool_search { query: "warp stabilizer" }
+tool_schema { name: "effect_apply_warp_stabilizer" }
+tool_invoke { name: "effect_apply_warp_stabilizer", args: { trackIndex: 1, clipIndex: 0 } }
+```
+
+`tool_invoke` validates against the tool's real schema and goes through the
+same rate limiter, so it behaves exactly like a direct call.
+**Never tell the user a capability is unsupported before running `tool_search`.**
+
+Operator-side: `PPMCP_PROFILE=core` (19, weak models) / `standard` (109,
+default) / `full` (277, everything resident).
+
 ## Token hygiene
 
 - `compact: true` default on orchestration tools  
 - One `edit_auto` > ten atomics  
 - Avoid dumping full effect catalogs unless needed  
+- Prefer `tool_search` over asking the user for `PPMCP_PROFILE=full`  

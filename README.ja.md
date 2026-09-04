@@ -44,30 +44,68 @@ npm install && npm run build && npm run dev:bridge
 
 ## MCP クライアントを接続する
 
-PPMCP は**ローカルの stdio MCP サーバー**です — 自分の PC 上で動く Node プロセスに、AI クライアントが直接話しかけます。ホスト型の「リモート MCP コネクタ」ではないため、Claude の Connectors 設定にある *「Add custom connector」→ Remote MCP server URL* のフローはここでは使いません。Setup 実行後、あなたの実際のパスはすでに `HOW-TO-CONNECT.txt` / `mcp-config-snippet.json` に書かれています。
+PPMCP は **ローカルの stdio MCP サーバー** です。AI クライアントが自分の PC 上で Node プロセスとして起動し、stdin/stdout で通信します。入力する URL やポートはありません。
 
-**Claude Desktop** — Setup が `claude_desktop_config.json` に自動で追加します。手動の場合は `"mcpServers"` オブジェクトに追加:
+> [!WARNING]
+> Claude の **Settings → Connectors → Add custom connector** は *Remote MCP server URL* を求めますが、これはホスト型サーバー用で PPMCP では**動作しません**。クライアントのローカル設定ファイル（または `claude mcp add`）を使ってください。
+
+どのクライアントも必要な値は同じ 2 つです。Setup が実際のパス付きで `%APPDATA%\PPMCP\HOW-TO-CONNECT.txt` と `mcp-config-snippet.json` に既に書き出しています：
+
+| Value | Default |
+|-------|---------|
+| `command` | `%LOCALAPPDATA%\PPMCP\node\node.exe` |
+| `args[0]` | `%LOCALAPPDATA%\PPMCP\server\dist\index.js` |
+
+> **エスケープ：** `.json` の中ではバックスラッシュを**二重**にします（`C:\\Users\\You\\...`）。コマンドラインでは不要です。接続失敗の最も多い原因です。
+
+**Claude Desktop** — `%APPDATA%\Claude\claude_desktop_config.json` — 既存の `"mcpServers"` オブジェクトにマージし、アプリを**完全に終了して再起動**します（ウィンドウを閉じるだけでは不十分）。
 
 ```json
 {
   "mcpServers": {
     "premiere-pro": {
-      "command": "C:\\Users\\あなた\\AppData\\Local\\PPMCP\\node\\node.exe",
-      "args": ["C:\\Users\\あなた\\AppData\\Local\\PPMCP\\server\\dist\\index.js"]
+      "command": "C:\\Users\\You\\AppData\\Local\\PPMCP\\node\\node.exe",
+      "args": ["C:\\Users\\You\\AppData\\Local\\PPMCP\\server\\dist\\index.js"]
     }
   }
 }
 ```
 
-**Claude Code**（CLI）:
+**Claude Code** (CLI) — `--scope user` で全プロジェクトから使えます。`claude mcp list` で確認できます。
 
 ```bash
-claude mcp add premiere-pro -- "C:\Users\あなた\AppData\Local\PPMCP\node\node.exe" "C:\Users\あなた\AppData\Local\PPMCP\server\dist\index.js"
+claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\node\node.exe" "C:\Users\You\AppData\Local\PPMCP\server\dist\index.js"
 ```
 
-**Cursor** — Settings → MCP → Add server（URL ではなく*ローカルコマンド*）:
-- Command: 上記の Node のパス
-- Args: 上記の server のパス
+**Cursor** — `%USERPROFILE%\.cursor\mcp.json` （グローバル）または `.cursor\mcp.json`（このプロジェクトのみ）— Claude Desktop と同じ JSON。
+
+**VS Code / GitHub Copilot** — `.vscode/mcp.json` — 形式が異なる唯一のクライアント：キーは `mcpServers` ではなく `servers`、さらに `"type": "stdio"` が必要です。**MCP: Open User Configuration** コマンドからも設定できます。
+
+```json
+{
+  "servers": {
+    "premiere-pro": {
+      "type": "stdio",
+      "command": "C:\\Users\\You\\AppData\\Local\\PPMCP\\node\\node.exe",
+      "args": ["C:\\Users\\You\\AppData\\Local\\PPMCP\\server\\dist\\index.js"]
+    }
+  }
+}
+```
+
+**Windsurf** — `%USERPROFILE%\.codeium\windsurf\mcp_config.json` （または Cascade パネル → MCP アイコン → Configure）— `mcpServers` 形式。設定後 Windsurf を再読み込み。
+
+**その他の MCP クライアント** — Cline, Roo Code, Continue, Zed, LM Studio, JetBrains AI, Gemini CLI, Codex CLI… トランスポートに **`stdio`**（"local" / "command" / "process" と呼ばれることもあります）、コマンドに Node のパス、引数にサーバーのパスを 1 つ指定します。ほとんどが上記の `mcpServers` 形式です。リモート URL 欄しかないクライアントでは PPMCP は動きません。
+
+**`PPMCP_PROFILE`** — `core` (~19) · `standard` (~109, 既定) · `full` (277). PPMCP は 277 個すべてではなく**プロファイル**を登録します。残りは `tool_search` → `tool_schema` → `tool_invoke` で到達できます。
+
+```json
+"env": { "PPMCP_PROFILE": "standard" }
+```
+
+→ **[INSTALL.md](./INSTALL.md)** · **[English README](./README.md#connect-your-mcp-client)**
+
+---
 
 ## ツールの状態
 

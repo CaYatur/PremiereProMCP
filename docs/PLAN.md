@@ -1,11 +1,16 @@
 # Premiere Pro MCP Server — Project Plan
 
-Status: **Planning — Gates 1 & 2 resolved; five live probe rounds against a
-real Premiere Pro 2026 instance completed (§3), including a fully
-live-confirmed end-to-end MOGRT text read/edit/write round-trip. Still
-pre-implementation — see FEATURES.md's top banner: 0 production code
-written.**
-Last updated: 2026-07-10
+Status: **Shipped and in maintenance.** Phases 0–6 are complete: 277 MCP
+tools across ~20 categories, a UXP plugin, the bridge/relay, and a PowerShell
+Setup with bundled portable Node are all released (v1.0.0 → v1.1.0). The
+planning content below is kept because §3's gate research and live-probe
+findings are still the authoritative record of *why* the architecture looks
+the way it does — but it is history, not a to-do list.
+
+**For what to build next, see [ROADMAP.md](./ROADMAP.md)** (repo audit and
+prioritized work). For what is verified to work today, see
+[FEATURES.md](./FEATURES.md).
+Last updated: 2026-09-04 (originally drafted 2026-07-10)
 
 ## 1. Goal
 
@@ -17,61 +22,43 @@ well-designed tools that both weak and strong models can use correctly.
 Ship it on GitHub with source + signed Releases and a true one-click
 install experience.
 
-## 2. Why this can win (competitive summary)
+## 2. Design principles
 
-Full detail in the research this plan is based on; headline points:
+These are the commitments the whole project is measured against. They are
+listed in priority order — when two of them conflict, the higher one wins.
 
-- The space is **already crowded** — competitors claim 170 to 1,000+ tools
-  (`leancoderkavy/premiere-pro-mcp`: 269, `hetpatel-11/Adobe_Premiere_Pro_MCP`:
-  278, `ayushozha/AdobePremiereProMCP`: ~1,027,
-  `antipaster/Adobe-Premiere-Pro-MCP`: 170+, plus `mikechambers/adb-mcp`,
-  `morim3/mcp_adobe_premiere`, `matrayu/adobe-mcp`). **Raw tool count alone
-  is not the differentiator** — but we still shouldn't concede it
-  needlessly: FEATURES.md now targets **~275 tools**, clearing both named
-  269/278 competitors, built from evidence (the live probe's confirmed
-  effect/transition/audio-filter catalogs — FEATURES.md §3.Q), not padding.
-  We're deliberately not chasing the ~1,027 claim; see §2's differentiation
-  pillars below for why quality/verification is the actual bet.
-- Every competitor found is built on **CEP + ExtendScript**, some leaning on
-  the undocumented **QE DOM** for real trims/ripple edits. **CEP is being
-  deprecated by Adobe** — Premiere Pro 2026 already breaks existing CEP
-  extensions (see `tmoroney/auto-subs#571`), and Adobe has frozen further
-  ExtendScript/CEP development in favor of UXP. Anyone shipping a new
-  CEP-based tool today is building on a foundation with a shrinking runway.
-- **Zero competitors ship a real one-click installer.** All require manual
-  steps: cloning the repo, `npm install`/`uv`, symlinking or copying into
-  Adobe's CEP extensions folder, enabling `PlayerDebugMode`, and manually
-  editing `claude_desktop_config.json`. This is the single biggest, most
-  fixable gap.
-- Adjacent space (DaVinci Resolve MCP) shows what "polish" looks like:
-  `Positronikal/davinci-mcp-professional` ships as a Claude Desktop
-  Extension ("installation as easy as clicking a button"), and
-  `lordhoell/davinci-resolve-mcp` ships a **Claude Code skill** that teaches
-  the model how to chain tools — directly relevant to our "models must use
-  the tools well" requirement.
-
-### Differentiation pillars (in priority order)
-
-1. **UXP-native, not a CEP hack.** Future-proof against Adobe's own
-   deprecation timeline; genuine "built for Premiere Pro 2026+" marketing
-   claim competitors cannot make truthfully.
-2. **Real one-click install.** A single signed installer (+ an `.mcpb`
-   bundle for the Claude Desktop half) that installs the bridge service,
-   registers the Premiere plugin, and auto-configures the MCP client — no
-   terminal required for the end user.
+1. **UXP-native, not a CEP hack.** Adobe froze ExtendScript/CEP development in
+   favour of UXP, and Premiere Pro 2026 ships UXP as a standard release. Every
+   core editing capability goes through the official `@adobe/premierepro` UXP
+   API. The one deliberate exception is a narrow CEP bridge for editable MOGRT
+   text, which exists only because UXP cannot write that property (§3, and
+   ARCHITECTURE.md §2.4) and is retired the moment it can.
+2. **Install without a terminal.** A single Setup that lays down the bridge,
+   registers the Premiere plugin, and writes the MCP client config. Bundled
+   portable Node so the user never installs a toolchain. Anything that makes a
+   non-developer open a shell is a bug in the installer, not a documentation
+   problem.
 3. **Edit quality, not metadata theater.** Prioritize the tools that do real
-   timeline work — ripple/roll/slip/slide trims, multicam, speed ramping,
-   Lumetri color, Essential Graphics/captions, keyframing — over tools that
-   just read/write metadata.
-4. **Model-usable by design.** Consistent naming, tiered tool design
-   (high-level workflow tools + atomic precision tools), rich schemas, and a
-   shipped usage guide/skill — so both a small model and a frontier model
-   can drive it correctly. See `FEATURES.md` §1 for the design rules.
-5. **SEO/distribution.** Keyword-rich repo name/description, GitHub topics,
-   a comparison table against named competitors, and submission to
-   `awesome-mcp-servers` and the official `modelcontextprotocol/servers`
-   list (both have open request threads we can fill —
-   `punkpeye/awesome-mcp-servers#3528`, `modelcontextprotocol/servers#3646`).
+   timeline work — ripple/roll/slip/slide trims, speed ramping, Lumetri,
+   Essential Graphics, keyframing — over tools that only read or write
+   metadata. Multi-step edits commit atomically through
+   `Project.executeTransaction()` so a failure halfway never leaves a
+   half-edited timeline.
+4. **Model-usable by design.** Consistent naming, a tiered surface (outcome
+   tools and playbooks first, atomic precision tools behind them), rich
+   schemas, structured recovery hints instead of blind retries, and a shipped
+   skill that teaches the chaining. A profile keeps the resident tool count
+   small; `tool_search` → `tool_schema` → `tool_invoke` keeps the rest
+   reachable. Both a small model and a frontier model have to be able to drive
+   it correctly.
+5. **Claims must be backed by a live session.** A tool is not "working"
+   because its method exists in Adobe's type declarations — that has been wrong
+   here more than once (§3's `Transcript.querySupportedLanguages()` threw at
+   runtime despite being type-declared). FEATURES.md's verification tiers, and
+   the checks in `scripts/`, exist to keep the documentation honest.
+6. **Discoverable.** Keyword-accurate repo name, description and topics; a
+   README that shows install and a real edit within the first screen;
+   submission to the public MCP server lists.
 
 ## 3. Two gating unknowns — desk-research resolved 2026-07-10, runtime behavior still to verify
 
@@ -112,7 +99,7 @@ Confirmed present in the official API:
 - **Export/render queue with real progress events:**
   `Constants.EncoderEvent` (`RENDER_PROGRESS`, `RENDER_COMPLETE`,
   `RENDER_ERROR`, `RENDER_CANCEL`, `RENDER_QUEUE`) — resolves the "render
-  status polling is awkward" gap noted in the original competitor research.
+  status polling is awkward" gap noted in the original research.
 - **Atomic multi-step edits:** `Project.executeTransaction(callback:
   (compoundAction: CompoundAction) => void)` — multiple `Action`s can be
   bundled into one undoable compound transaction.
@@ -151,7 +138,7 @@ breadth: **no dedicated Lumetri/color API** (generic effect-component
 mechanism only, untested), **no waveform/scope data readout**, **no
 auto-transcription trigger** (only transcript JSON import/export), **no
 freeform text/title creation** (MOGRT insert only, confirming the original
-competitor research's warning), **no Essential Sound preset methods**
+the original research's warning), **no Essential Sound preset methods**
 (ducking/noise-reduction/dialogue-enhance), and **no multicam
 sync/create/switch-angle methods** (only `isMulticamClip()`). These are
 tracked tool-by-tool with verification tags in FEATURES.md §1 and §3 — do
@@ -325,7 +312,7 @@ This directly enables the priority the user set: a native installer (Inno
 Setup/NSIS) that packages the plugin as `.ccx`, installs the bridge
 service, and calls UPIA silently — a genuine zero-terminal, zero-dev-mode
 install, which is exactly what lets us stay usable if/when CEP-based
-competitors break on future Premiere Pro updates.
+CEP-based tooling breaks on future Premiere Pro updates.
 
 **Partially live-confirmed 2026-07-10:** the diagnostic plugin (Gate 1
 probe, above) was successfully packaged with a real `manifestVersion: 5`
@@ -398,22 +385,20 @@ determines which categories in FEATURES.md are real.
 
 ## 6. Distribution & SEO strategy (detail, executed in Phase 6)
 
-- Repo name: keyword-rich, e.g. `premiere-pro-mcp-server` (verify
-  availability at repo-creation time; competitors already hold
-  `premiere-pro-mcp` and similar — need a name that's still keyword-strong).
+- Repo name: keyword-rich and still available, front-loading "Premiere Pro"
+  and "MCP".
 - GitHub repo **description** field front-loads "Premiere Pro MCP Server" /
   "Adobe Premiere Pro MCP" — this is what search results surface.
 - GitHub **topics**: `mcp`, `model-context-protocol`, `mcp-server`, `claude`,
   `claude-desktop`, `adobe`, `premiere-pro`, `video-editing`.
 - README structure (English): badges (license, tool count, platform, MCP
-  protocol version) → one-line install → "why this exists" / comparison
-  table against named competitors → categorized tool table → quick start per
-  client (Claude Desktop, Claude Code, Cursor, Windsurf) → architecture
-  diagram → demo GIF.
-- Submit to `awesome-mcp-servers` (open request: `punkpeye/awesome-mcp-servers#3528`)
-  and the official `modelcontextprotocol/servers` list (open request:
-  `modelcontextprotocol/servers#3646`) — real distribution channels, not
-  just README wording.
+  protocol version) → one-line install → "why this exists" → categorized
+  tool table → quick start per client (Claude Desktop, Claude Code, Cursor,
+  VS Code, Windsurf, and the generic stdio recipe) → architecture diagram →
+  demo GIF.
+- Submit to the public MCP server lists (`awesome-mcp-servers`, the official
+  `modelcontextprotocol/servers` list, PulseMCP, LobeHub) — real distribution
+  channels, not just README wording.
 - Cross-post to relevant communities once stable (r/editors, r/premiere,
   relevant Discords) — not needed for v1 but noted for launch checklist.
 

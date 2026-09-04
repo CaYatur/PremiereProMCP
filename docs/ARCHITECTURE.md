@@ -12,10 +12,9 @@ clients launch the MCP server **per session over stdio**, so the MCP server
 process itself is not a good place to host a long-lived socket that the
 Premiere plugin depends on: if the relay lived inside the MCP server
 process, every session start/stop would drop the plugin's connection, and
-concurrent Claude sessions would fight over the port. (This is the same
-reason `mikechambers/adb-mcp` — the closest existing precedent for a
-multi-app Adobe UXP MCP bridge — runs its Command Proxy Server as its own
-persistent process rather than embedding it in the MCP server.)
+concurrent Claude sessions would fight over the port. Any bridge that has
+to outlive both the host app and the client session has to be its own
+persistent process.
 
 So: **three components**, two of them long-lived, one of them per-session.
 
@@ -285,8 +284,8 @@ what most comparable projects do.
   possible, also drives Claude Desktop/Code config registration so the
   `.mcpb` step isn't even manually required.
 - Ship the MCP server as a **compiled/bundled artifact** (not requiring the
-  end user to have Node.js installed) if at all practical — this alone
-  beats every competitor's `npm install -g` / `uv run` requirement.
+  end user to have Node.js installed) if at all practical — no `npm install -g`
+  or `uv run` step for the end user.
 - Single GitHub Release per version, multiple platform-specific assets.
 
 ## 6. Tech stack (working assumption, confirm in Phase 0)

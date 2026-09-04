@@ -5,7 +5,7 @@
  * - Move multi-step choreography into the server (deterministic)
  * - Compact responses + recovery hints stop retry thrash
  * - Progressive disclosure: playbooks + edit_run vs full catalog
- * Competitors (hetpatel): high-level assemble_* / clipPlan — same idea
+ * High-level assemble_* / clipPlan tools — one call replaces a long chain
  *
  * Competitive edge: automatic systems (edit_auto, polish, youtube/social/trailer
  * playbooks) beat raw tool-count catalogs on delivery quality + token cost.
@@ -172,7 +172,7 @@ export const agentOrchestrationTools = [
     name: "edit_auto",
     title: "Auto edit from intent (smart router)",
     description:
-      "ONE-CALL automatic system: maps natural intent (e.g. 'youtube vlog', 'tiktok', 'trailer', 'podcast') to the best playbook and runs it with args. Weak models should prefer this over picking tools. Beats competitors who force 20+ atomic calls.",
+      "ONE-CALL automatic system: maps natural intent (e.g. 'youtube vlog', 'tiktok', 'trailer', 'podcast') to the best playbook and runs it with args. Weak models should prefer this over picking tools — one call instead of 20+ atomic ones.",
     inputSchema: {
       intent: z
         .string()

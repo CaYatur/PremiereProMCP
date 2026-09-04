@@ -1884,7 +1884,7 @@ export const PLAYBOOKS: Record<
     },
   },
 
-  // ── Automatic systems that beat tool-count competitors ────────────
+  // ── Automatic systems: one op replaces a long atomic chain ─────────
 
   youtube: {
     title: "YouTube-ready cut (auto)",

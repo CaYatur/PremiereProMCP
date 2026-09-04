@@ -1,7 +1,7 @@
 {
   "id": "com.ppmcp.plugin",
   "name": "Premiere Pro MCP",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "main": "index.html",
   "manifestVersion": 5,
   "host": [

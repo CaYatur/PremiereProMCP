@@ -85,9 +85,42 @@ Without this app, a beginner cannot load the PPMCP panel into Premiere.
 
 ### 3–5. Connect an MCP client
 
-PPMCP is a **local stdio MCP server** — a Node process on your own PC that your AI client talks to directly, not a hosted "remote MCP connector". Your exact ready-to-paste paths are already in `HOW-TO-CONNECT.txt` / `mcp-config-snippet.json`. General form:
+#### The two facts that decide every client's config
 
-**Claude Desktop** — Setup already adds this to `claude_desktop_config.json` for you. To do it by hand, merge into the `"mcpServers"` object:
+1. **PPMCP is a local stdio server.** Your AI client *launches* it as a child
+   process and talks over stdin/stdout. There is no URL, no port to enter, and
+   no account to log into.
+   > Claude's **Settings → Connectors → Add custom connector** asks for a
+   > *Remote MCP server URL*. That dialog is for hosted servers and **will not
+   > work** for PPMCP. Use the client's local config file (or `claude mcp add`).
+2. **Every client needs the same two values** — and Setup already wrote both,
+   with your real paths, into `%APPDATA%\PPMCP\HOW-TO-CONNECT.txt` and
+   `mcp-config-snippet.json`. Copy them from there; do not retype them.
+
+| Value | Default location |
+|-------|------------------|
+| `command` — the Node executable | `%LOCALAPPDATA%\PPMCP\node\node.exe` |
+| `args[0]` — the MCP server entry | `%LOCALAPPDATA%\PPMCP\server\dist\index.js` |
+
+Expanded, for a user named `You`:
+`C:\Users\You\AppData\Local\PPMCP\node\node.exe` and
+`C:\Users\You\AppData\Local\PPMCP\server\dist\index.js`.
+
+> **JSON path escaping:** inside a `.json` file every backslash must be doubled
+> (`C:\\Users\\You\\...`). On a command line it must **not** be. Getting this
+> wrong is the single most common connection failure.
+>
+> Installed from a git clone instead of the Setup ZIP? Use `node` (your system
+> Node 18+) as the `command` and the absolute path to `server/dist/index.js` in
+> your clone as the argument — after running `npm run build`.
+
+---
+
+#### Claude Desktop
+
+Setup writes this for you. To do it by hand, edit
+`%APPDATA%\Claude\claude_desktop_config.json` (create it if missing) and merge
+into the existing `"mcpServers"` object — do not replace the whole file:
 
 ```json
 {
@@ -100,17 +133,130 @@ PPMCP is a **local stdio MCP server** — a Node process on your own PC that you
 }
 ```
 
-**Claude Code** (CLI):
+Then **fully quit and reopen Claude Desktop** (closing the window is not
+enough — quit it from the tray/menu bar).
+
+#### Claude Code (CLI)
 
 ```bash
-claude mcp add premiere-pro -- "C:\Users\You\AppData\Local\PPMCP\node\node.exe" "C:\Users\You\AppData\Local\PPMCP\server\dist\index.js"
+claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\node\node.exe" "C:\Users\You\AppData\Local\PPMCP\server\dist\index.js"
 ```
 
-**Cursor** — Settings → MCP → Add server (a *local command*, not a URL):
-- Command: the Node path above
-- Args: the server path above
+`--scope user` makes it available in every project. Drop it (or use
+`--scope project`) to scope it to the current repo. Verify with
+`claude mcp list`, and remove with `claude mcp remove premiere-pro`.
 
-> Claude's **Settings → Connectors → Add custom connector** dialog asks for a *Remote MCP server URL* — that's for hosted/remote MCP servers and does not apply to PPMCP. Use the client's local `mcpServers` config (or `claude mcp add`) instead.
+#### Cursor
+
+Cursor reads `mcp.json`, same shape as Claude Desktop:
+
+- **Global (all projects):** `%USERPROFILE%\.cursor\mcp.json`
+- **This project only:** `.cursor\mcp.json` in the project root
+
+```json
+{
+  "mcpServers": {
+    "premiere-pro": {
+      "command": "C:\\Users\\You\\AppData\\Local\\PPMCP\\node\\node.exe",
+      "args": ["C:\\Users\\You\\AppData\\Local\\PPMCP\\server\\dist\\index.js"]
+    }
+  }
+}
+```
+
+Then Settings → MCP and confirm `premiere-pro` shows its tools.
+
+#### VS Code (GitHub Copilot agent mode)
+
+**VS Code is the exception** — its key is `servers`, not `mcpServers`, and it
+wants an explicit `"type": "stdio"`:
+
+- **This workspace:** `.vscode/mcp.json`
+- **All workspaces:** run the command **MCP: Open User Configuration**
+
+```json
+{
+  "servers": {
+    "premiere-pro": {
+      "type": "stdio",
+      "command": "C:\\Users\\You\\AppData\\Local\\PPMCP\\node\\node.exe",
+      "args": ["C:\\Users\\You\\AppData\\Local\\PPMCP\\server\\dist\\index.js"]
+    }
+  }
+}
+```
+
+Then open Chat → **Agent** mode → the tools picker to enable it.
+
+#### Windsurf (Cascade)
+
+Edit `%USERPROFILE%\.codeium\windsurf\mcp_config.json` (or Cascade panel →
+MCP icon → **Configure**). Same `mcpServers` shape as Claude Desktop. Reload
+Windsurf afterwards.
+
+#### Any other MCP client
+
+Cline, Roo Code, Continue, Zed, LM Studio, JetBrains AI, Gemini CLI, Codex
+CLI, your own MCP host — the recipe is always the same. Find where the client
+stores MCP servers, then give it:
+
+| Field | Value |
+|-------|-------|
+| Transport / type | `stdio` (also called "local", "command", or "process") |
+| Command | `C:\Users\You\AppData\Local\PPMCP\node\node.exe` |
+| Arguments | `C:\Users\You\AppData\Local\PPMCP\server\dist\index.js` |
+| Working directory | not required |
+| Environment | optional — see `PPMCP_PROFILE` below |
+
+Almost every client uses the `mcpServers` JSON shape shown above; VS Code's
+`servers` + `"type": "stdio"` is the only common variant. If a client offers
+only a *remote URL* field, it cannot run PPMCP — that field is for hosted
+servers.
+
+**Quick test without any client.** This should print a startup line to stderr
+and then wait (Ctrl+C to stop). If it does, the server itself is fine and the
+problem is in your client's config:
+
+```bash
+"C:\Users\You\AppData\Local\PPMCP\node\node.exe" "C:\Users\You\AppData\Local\PPMCP\server\dist\index.js"
+```
+
+#### Optional: choose how many tools the model sees
+
+PPMCP ships 277 tools. Registering all of them costs thousands of tokens per
+session and makes tool selection worse, so the server registers a **profile**
+by default and keeps the rest reachable through `tool_search` → `tool_schema`
+→ `tool_invoke`.
+
+| `PPMCP_PROFILE` | Registered | Use when |
+|-----------------|-----------|----------|
+| `core` | ~19 | Small/cheap models. `edit_bootstrap` → `edit_auto` → `edit_verify` only. |
+| `standard` *(default)* | ~109 | Everything with a recorded live pass, plus the atomics a real cut uses. |
+| `full` | 277 | You want the entire catalog resident, as in 1.0.x. |
+
+Set it like any other MCP env var:
+
+```json
+{
+  "mcpServers": {
+    "premiere-pro": {
+      "command": "C:\\Users\\You\\AppData\\Local\\PPMCP\\node\\node.exe",
+      "args": ["C:\\Users\\You\\AppData\\Local\\PPMCP\\server\\dist\\index.js"],
+      "env": { "PPMCP_PROFILE": "standard" }
+    }
+  }
+}
+```
+
+#### If it doesn't connect
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Client shows no `premiere-pro` server | Config not loaded | Fully quit and reopen the client (not just the window) |
+| Server fails to start | Wrong path, or single backslashes in JSON | Double every backslash in `.json`; run the quick test above |
+| Tools appear, but every call returns `PLUGIN_NOT_CONNECTED` | Premiere panel not loaded, or bridge down | Start the **PPMCP Bridge** shortcut, then load the panel in UXP Developer Tool until it shows **Active** |
+| Calls return `RATE_LIMITED` | Tools fired too fast | Wait `retryAfterMs`; prefer `edit_run` batches. This guard exists because flooding Premiere crashes it |
+| A tool you expected is missing | You are on a profile | `tool_search("...")` to find it, or set `PPMCP_PROFILE=full` |
 
 ### 6. Optional CEP (if checked in the wizard)
 Restart Premiere → **Window → PPMCP Text Bridge**.

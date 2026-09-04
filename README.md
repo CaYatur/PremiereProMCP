@@ -2,6 +2,12 @@
 
 **Control Adobe Premiere Pro from Claude, Cursor, or any [MCP](https://modelcontextprotocol.io)-compatible AI client — real timeline editing, not just project metadata.**
 
+[![CI](https://github.com/CaYatur/PremiereProMCP/actions/workflows/ci.yml/badge.svg)](https://github.com/CaYatur/PremiereProMCP/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/CaYatur/PremiereProMCP)](https://github.com/CaYatur/PremiereProMCP/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+![Platform: Windows](https://img.shields.io/badge/platform-Windows-blue)
+![Tools: 277, 109 registered by default](https://img.shields.io/badge/MCP%20tools-277%20(109%20default)-orange)
+
 **Developer:** [CaYaDev](https://cayadev.com) · [cayadev.com](https://cayadev.com)
 
 > [!IMPORTANT]
@@ -74,11 +80,21 @@ Details: **[INSTALL.md](./INSTALL.md)**.
 
 ## Connect your MCP client
 
-PPMCP is a **local stdio MCP server** — a Node process on your own PC that your AI client talks to directly. It is **not** a hosted "remote MCP connector", so the *"Add custom connector" → Remote MCP server URL* flow you may see in Claude's Connectors settings does not apply here. Point your client at a local command instead.
+PPMCP is a **local stdio MCP server** — a Node process on your own PC that your AI client launches and talks to over stdin/stdout. There is no URL and no port to enter.
 
-After running Setup, your exact ready-to-paste paths are already generated in `%APPDATA%\PPMCP\HOW-TO-CONNECT.txt` and `mcp-config-snippet.json`. General form:
+> [!WARNING]
+> Claude's **Settings → Connectors → Add custom connector** asks for a *Remote MCP server URL*. That dialog is for hosted servers and **will not work** for PPMCP. Use the client's local config file (or `claude mcp add`) instead.
 
-**Claude Desktop** — Setup writes this into `claude_desktop_config.json` for you automatically. To do it by hand, merge this into the `"mcpServers"` object:
+Every client needs the same two values, and Setup already wrote them — with your real paths — into `%APPDATA%\PPMCP\HOW-TO-CONNECT.txt` and `mcp-config-snippet.json`:
+
+| Value | Default |
+|-------|---------|
+| `command` | `%LOCALAPPDATA%\PPMCP\node\node.exe` |
+| `args[0]` | `%LOCALAPPDATA%\PPMCP\server\dist\index.js` |
+
+> **Escaping:** inside a `.json` file every backslash must be doubled (`C:\\Users\\You\\...`); on a command line it must not be. This is the most common connection failure.
+
+**Claude Desktop** — Setup writes this for you. By hand: edit `%APPDATA%\Claude\claude_desktop_config.json` (create it if missing), merge into the existing `"mcpServers"` object, then **fully quit and reopen** the app — closing the window is not enough.
 
 ```json
 {
@@ -91,17 +107,55 @@ After running Setup, your exact ready-to-paste paths are already generated in `%
 }
 ```
 
-**Claude Code** (CLI):
+**Claude Code** (CLI) — `--scope user` makes it available in every project; check with `claude mcp list`.
 
 ```bash
-claude mcp add premiere-pro -- "C:\Users\You\AppData\Local\PPMCP\node\node.exe" "C:\Users\You\AppData\Local\PPMCP\server\dist\index.js"
+claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\node\node.exe" "C:\Users\You\AppData\Local\PPMCP\server\dist\index.js"
 ```
 
-**Cursor** — Settings → MCP → Add server (a *local command*, not a URL):
-- Command: the Node path above
-- Args: the server path above
+**Cursor** — same JSON as Claude Desktop, in `%USERPROFILE%\.cursor\mcp.json` (global) or `.cursor\mcp.json` (this project only).
 
-Building from source instead of the Setup ZIP? Use `node` on your PATH and `server/dist/index.js` from the repo.
+**VS Code / GitHub Copilot agent mode** — the one client with a different shape: the key is `servers`, not `mcpServers`, and it needs an explicit `"type": "stdio"`. Put it in `.vscode/mcp.json`, or run the **MCP: Open User Configuration** command.
+
+```json
+{
+  "servers": {
+    "premiere-pro": {
+      "type": "stdio",
+      "command": "C:\\Users\\You\\AppData\\Local\\PPMCP\\node\\node.exe",
+      "args": ["C:\\Users\\You\\AppData\\Local\\PPMCP\\server\\dist\\index.js"]
+    }
+  }
+}
+```
+
+**Windsurf** — `%USERPROFILE%\.codeium\windsurf\mcp_config.json` (or Cascade panel → MCP icon → Configure), `mcpServers` shape, then reload Windsurf.
+
+**Any other MCP client** — Cline, Roo Code, Continue, Zed, LM Studio, JetBrains AI, Gemini CLI, Codex CLI, or your own host: give it transport **`stdio`** (some clients call it "local", "command", or "process"), the Node path as the command, and the server path as the single argument. Nearly all of them use the `mcpServers` shape above; VS Code's `servers` + `"type": "stdio"` is the only common variant. A client that offers *only* a remote URL field cannot run PPMCP.
+
+**Test without any client** — this should print a startup line and then wait (Ctrl+C to stop). If it does, the server is fine and the problem is your client's config:
+
+```bash
+"C:\Users\You\AppData\Local\PPMCP\node\node.exe" "C:\Users\You\AppData\Local\PPMCP\server\dist\index.js"
+```
+
+**Building from source** instead of the Setup ZIP? Run `npm run build`, then use `node` (system Node 18+) as the command and the absolute path to your clone's `server/dist/index.js` as the argument.
+
+### Choose how many tools the model sees
+
+PPMCP ships 277 tools. Registering all of them costs thousands of tokens per session and makes tool selection worse, so the server registers a **profile** and keeps the rest one call away via `tool_search` → `tool_schema` → `tool_invoke`.
+
+| `PPMCP_PROFILE` | Registered | Use when |
+|-----------------|-----------|----------|
+| `core` | ~19 | Small/cheap models; `edit_bootstrap` → `edit_auto` → `edit_verify` only |
+| `standard` *(default)* | ~109 | Live-verified tools plus the atomics a real cut uses |
+| `full` | 277 | Entire catalog resident, as in 1.0.x |
+
+```json
+"env": { "PPMCP_PROFILE": "standard" }
+```
+
+Full per-client walkthrough and a troubleshooting table: **[INSTALL.md](./INSTALL.md)**.
 
 ---
 
@@ -194,7 +248,7 @@ Rough cuts · cinematic SFX · music-rhythm cuts · ad-style motion cards · QA 
 
 ## Tool status: what's actually tested
 
-**277 MCP tools** across ~20 categories (project, sequence, track, clip, transitions, effects — including 52 one-shot dedicated effect/audio/transition shortcuts — color/Lumetri, audio, text/titles/shapes, markers/metadata, multicam, proxy/media, export, analysis, batch, selection/system, checkpoints, agent-orchestration/edit-pipeline, plus ~22 high-level workflow tools). Most of that surface maps to a real, documented method in Adobe's own `@adobe/premierepro` UXP API. Real end-to-end sessions have now exercised a much wider slice of it than the ~48s smoke sequence below; the issues surfaced so far are the ones flagged below (see "Still broken" and "Lower-confidence claims") — see [docs/FEATURES.md](./docs/FEATURES.md) for the full tool-by-tool verification tier (type-verified / live-verified / verified-composed / known-broken).
+**277 MCP tools** across ~20 categories. Since 1.1.0 the server registers a **profile** (109 by default) rather than the whole catalog — the rest stay one call away via `tool_search` → `tool_schema` → `tool_invoke`, and `PPMCP_PROFILE=full` restores the old surface. The catalog spans project, sequence, track, clip, transitions, effects — including 52 one-shot dedicated effect/audio/transition shortcuts — color/Lumetri, audio, text/titles/shapes, markers/metadata, multicam, proxy/media, export, analysis, batch, selection/system, checkpoints, agent-orchestration/edit-pipeline, plus ~22 high-level workflow tools). Most of that surface maps to a real, documented method in Adobe's own `@adobe/premierepro` UXP API. Real end-to-end sessions have now exercised a much wider slice of it than the ~48s smoke sequence below; the issues surfaced so far are the ones flagged below (see "Still broken" and "Lower-confidence claims") — see [docs/FEATURES.md](./docs/FEATURES.md) for the full tool-by-tool verification tier (type-verified / live-verified / verified-composed / known-broken).
 
 **What holds up well under real, end-to-end testing** (a real ~48s multi-track sequence built from scratch, video + 4 audio tracks, transitions, gain, keyframed fades, markers, title, screenshot, save): sequence/project creation, `clip_overwrite`, trim, roll/slip/slide, split, ripple delete, shape add + position + fill color, `text_write`'s PNG fallback path, listing effects/transitions, gain/dB control, and project save/screenshot. **`clip_append` is now confirmed working in a real session** — it appends clips in the correct order (it previously failed with `"Script action failed to execute"`; the shared-retry fix held up live). **`sequence_set_in_out` is confirmed working too** (re-tested 2026-07-11) — it set the in/out points via `"via": "sequence.createSetInPointAction + sequence.createSetOutPointAction"`, confirming the 1.0.1 root-cause fix (the factory is on the Sequence object, not `SequenceEditor`). Multi-step edits (roll/slip/slide and composite workflow tools) are committed through Premiere's `Project.executeTransaction()` — several primitive actions run as one atomic unit, so a failure partway through doesn't leave the timeline half-edited. That transaction design has been the most reliable part of the whole plugin.
 
@@ -230,10 +284,11 @@ This section gets updated as real Premiere sessions surface more ground truth �
 | `bridge/` | WebSocket relay (`:8265`) |
 | `plugin/` | UXP panel in Premiere |
 | `installer/` | Windows PowerShell Setup (Setup.bat) + release packager |
-| `docs/` | Architecture & agent usage |
+| `docs/` | Architecture, agent usage, roadmap |
 | `skill/` | Compact AI skill |
+| `scripts/` | Smoke runs + the CI catalog/profile checks |
 
-See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) and [docs/FEATURES.md](./docs/FEATURES.md).
+See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md), [docs/FEATURES.md](./docs/FEATURES.md) and [docs/ROADMAP.md](./docs/ROADMAP.md).
 
 ---
 
@@ -248,11 +303,18 @@ See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) and [docs/FEATURES.md](./docs
 ## Development
 
 ```bash
-npm install
+npm ci                 # restores workspace links; plain npm install also works
 npm run build
+npm run typecheck
+node scripts/check-catalog.mjs   # catalog integrity, no Premiere needed
+node scripts/check-profiles.mjs  # tool-profile integrity
 npm run dev:bridge
 npm run release:win    # build Setup ZIP (PowerShell wizard + portable Node)
 ```
+
+CI runs build + typecheck + both checks on Windows and Linux (Node 20 / 22).
+Anything needing a live Premiere Pro session stays in `scripts/smoke-*.mjs`
+and is run by hand.
 
 ---
 

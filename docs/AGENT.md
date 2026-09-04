@@ -5,9 +5,9 @@
 
 ## Goal
 
-Higher **delivery quality** than tool-count competitors, with **low token cost** and **no retry thrash**.
+Maximum **delivery quality** per call, with **low token cost** and **no retry thrash**.
 
-We do **not** win by shipping more atomic mirrors of Premiere menus. We win with:
+A bigger pile of atomic mirrors of Premiere's menus does not make a better cut. What does:
 
 1. **Automatic packs** (one call → complete professional cut)
 2. **Intent router** (`edit_auto`)
@@ -68,16 +68,16 @@ edit_bootstrap
   → export (if not in playbook)
 ```
 
-## Vs competitors
+## Design rules
 
-| | Typical CEP MCP | PPMCP |
-|--|-----------------|-------|
-| Philosophy | Mirror every API | Outcome + automatic packs |
-| Weak models | Lost in 200+ tools | `edit_auto` / playbooks |
-| Text | Often unsupported | Editable MOGRT + recovery |
-| Delivery | Manual multi-tool | `polish` / `delivery` |
-| Failure | Model thrash | recovery + continue |
-| Platform | CEP (sunset) | UXP + optional CEP text |
+| Concern | How PPMCP handles it |
+|--|--|
+| Philosophy | Outcome-shaped tools + automatic packs, not a 1:1 API mirror |
+| Weak models | `edit_auto` / playbooks; the `standard` profile keeps the surface small |
+| Text | Editable MOGRT with a PNG fallback and structured recovery |
+| Delivery | `polish` / `delivery` do grade + transitions + fades in one call |
+| Failure | `recovery` hint + continue the plan; never a blind retry loop |
+| Platform | UXP-native, with the CEP bridge scoped to editable text only |
 
 ## Prompt templates
 

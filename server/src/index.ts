@@ -8,6 +8,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { RelayClient } from "./relayClient.js";
 import { formatRelayError, ToolContext } from "./toolDefinition.js";
 import { allTools } from "./tools/index.js";
+import { createMetaTools } from "./tools/meta.js";
+import { inProfile, parseProfile } from "./toolProfiles.js";
 import { checkToolRateLimit, markToolComplete, RateLimitError } from "./rateLimit.js";
 
 const relay = new RelayClient();
@@ -15,12 +17,20 @@ relay.connect();
 
 const server = new McpServer({
   name: "premiere-pro-mcp",
-  version: "0.1.0",
+  version: "1.1.0",
 });
 
 const ctx: ToolContext = { relay };
 
-for (const tool of allTools) {
+// Registering all ~277 schemas costs the client thousands of tokens per
+// session and measurably hurts tool selection. Register a profile instead;
+// everything else stays reachable via the tool_search/tool_schema/tool_invoke
+// meta-tools. See server/src/toolProfiles.ts.
+const profile = parseProfile(process.env.PPMCP_PROFILE);
+const metaTools = createMetaTools(allTools, profile);
+const registered = [...metaTools, ...allTools.filter((t) => inProfile(t.name, profile))];
+
+for (const tool of registered) {
   server.registerTool(
     tool.name,
     {
@@ -88,4 +98,9 @@ for (const tool of allTools) {
 const transport = new StdioServerTransport();
 await server.connect(transport);
 
-console.error(`[ppmcp-server] MCP server running over stdio, ${allTools.length} tools registered.`);
+console.error(
+  `[ppmcp-server] MCP server running over stdio. Profile "${profile}": ` +
+    `${registered.length} tools registered of ${allTools.length + metaTools.length} available ` +
+    `(the rest via tool_search / tool_schema / tool_invoke). ` +
+    `Set PPMCP_PROFILE=core|standard|full to change.`,
+);

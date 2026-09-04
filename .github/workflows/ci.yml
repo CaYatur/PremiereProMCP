@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build & checks (node ${{ matrix.node }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Windows is the primary target; ubuntu catches path/case assumptions
+        # that would break the planned macOS support.
+        os: [windows-latest, ubuntu-latest]
+        node: ["20", "22"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      # `npm ci` also recreates the workspace symlinks. A tree without them
+      # fails to build with "Cannot find module '@ppmcp/shared'" — this job
+      # is what stops that from shipping unnoticed.
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Build all workspaces
+        run: npm run build
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # No Premiere Pro here, so nothing that touches the relay can run.
+      # These are the checks that are meaningful without a live host.
+      - name: Tool profile check
+        run: node scripts/check-profiles.mjs
+
+      - name: Tool catalog check
+        run: node scripts/check-catalog.mjs
