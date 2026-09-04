@@ -97,7 +97,7 @@ claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\no
 
 **その他の MCP クライアント** — Cline, Roo Code, Continue, Zed, LM Studio, JetBrains AI, Gemini CLI, Codex CLI… トランスポートに **`stdio`**（"local" / "command" / "process" と呼ばれることもあります）、コマンドに Node のパス、引数にサーバーのパスを 1 つ指定します。ほとんどが上記の `mcpServers` 形式です。リモート URL 欄しかないクライアントでは PPMCP は動きません。
 
-**`PPMCP_PROFILE`** — `core` (~19) · `standard` (~109, 既定) · `full` (277). PPMCP は 277 個すべてではなく**プロファイル**を登録します。残りは `tool_search` → `tool_schema` → `tool_invoke` で到達できます。
+**`PPMCP_PROFILE`** — `core` (19) · `standard` (109, 既定) · `full` (277). これはセッションの*出発点*を決めるだけです。モデルは `tool_profile({ profile: "full" })` や `{ category: "color" }` で自分の道具立てを広げられ、`tool_invoke` は登録の有無にかかわらず任意のツールを実行します。
 
 ```json
 "env": { "PPMCP_PROFILE": "standard" }

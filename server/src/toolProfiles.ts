@@ -6,6 +6,13 @@
 // a *profile* by default and keeps the rest reachable through the `tool_*`
 // meta-tools (server/src/tools/meta.ts).
 //
+// The profile is a *starting point*, not a cage. Every tool is registered with
+// the MCP server at boot; the ones outside the profile are simply disabled.
+// `tool_profile` flips them back on at runtime and the server emits
+// `notifications/tools/list_changed`, so a model that decides it needs the
+// whole catalog can grant itself the whole catalog. `PPMCP_PROFILE` only
+// decides what it starts with.
+//
 // Profile membership is evidence-driven, not taste:
 //   - `core`     — orchestration, checkpoints, connection. Enough for a weak
 //                  model to run `edit_bootstrap` → `edit_auto` → `edit_verify`.
@@ -163,7 +170,9 @@ const STANDARD = new Set<string>([
 ]);
 
 /** Meta-tools are registered separately by index.ts and are never filtered. */
-export const META_TOOL_NAMES = ["tool_search", "tool_schema", "tool_invoke"] as const;
+export const META_TOOL_NAMES = ["tool_search", "tool_schema", "tool_invoke", "tool_profile"] as const;
+
+export const PROFILE_ORDER: readonly ProfileName[] = ["core", "standard", "full"];
 
 export function parseProfile(raw: string | undefined): ProfileName {
   const v = (raw ?? "").trim().toLowerCase();

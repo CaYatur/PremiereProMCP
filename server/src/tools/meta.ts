@@ -1,21 +1,48 @@
-// Meta-tools: reach the full catalog without paying for its schemas.
+// Meta-tools: reach the full catalog without paying for its schemas, and let
+// the model widen its own tool surface when it decides it needs to.
 //
 // The server registers a profile (see server/src/toolProfiles.ts), not all
-// ~277 tools. These three keep everything else one call away:
+// ~277 tools. These four keep everything else within reach:
 //
-//   tool_search("fade")  → candidate names + one-line descriptions
-//   tool_schema("clip_trim") → that tool's parameters
-//   tool_invoke("clip_trim", { ... }) → runs it
+//   tool_search("fade")       → candidate names + one-line descriptions
+//   tool_schema("clip_trim")  → that tool's parameters
+//   tool_invoke("clip_trim", {...}) → run it, registered or not
+//   tool_profile({ profile: "full" }) → register more tools for real
+//
+// tool_invoke is the always-works path: it dispatches through our own catalog,
+// so it reaches disabled tools regardless of what the client believes.
+// tool_profile is the better path when the model expects to use a category
+// repeatedly — it makes the tools appear in the client's own tool list.
 //
 // Built as a factory so `index.ts` can pass the catalog in — importing
 // `./index.js` from here would be a cycle.
 
 import { z, ZodRawShape, ZodTypeAny } from "zod";
 import { defineTool, ToolContext, ToolDef, ToolOutcome } from "../toolDefinition.js";
-import { inProfile, ProfileName } from "../toolProfiles.js";
+import { inProfile, ProfileName, PROFILE_ORDER } from "../toolProfiles.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- heterogeneous catalog
 type AnyTool = ToolDef<any>;
+
+/**
+ * How index.ts lets the meta-tools change what is registered. Kept as an
+ * interface so meta.ts never imports the MCP SDK.
+ */
+export interface SurfaceControl {
+  /** Profile the session started with. */
+  readonly startingProfile: ProfileName;
+  /** Profile currently in force (may have been widened at runtime). */
+  current(): ProfileName;
+  /** Names currently registered with the MCP server (meta-tools included). */
+  registered(): Set<string>;
+  /**
+   * Switch to `profile` and/or additionally enable `extra` tool names.
+   * `resetExtras` drops previously pinned names — used when the caller names a
+   * profile explicitly, so "go back to core" really shrinks.
+   * Emits one `tools/list_changed`. Returns the new registered count.
+   */
+  apply(profile: ProfileName, extra?: string[], resetExtras?: boolean): number;
+}
 
 /** Compact, model-readable description of one zod field. */
 function describeField(schema: ZodTypeAny): string {
@@ -97,19 +124,22 @@ function scoreMatch(tool: AnyTool, terms: string[]): number {
   return score;
 }
 
-export function createMetaTools(catalog: AnyTool[], profile: ProfileName): AnyTool[] {
+export function createMetaTools(catalog: AnyTool[], surface: SurfaceControl): AnyTool[] {
   const byName = new Map(catalog.map((t) => [t.name, t]));
   const categories = Array.from(new Set(catalog.map((t) => t.name.split("_")[0] ?? ""))).sort();
+  const isRegistered = (name: string) => surface.registered().has(name);
 
   return [
     defineTool({
       name: "tool_search",
       title: "Search the full tool catalog",
       description:
-        `Find tools that are not registered in the active profile (${profile}). ` +
-        `Returns name + one-line description for each match. ` +
-        `Follow with tool_schema to see parameters, then tool_invoke to run it. ` +
-        `Search before assuming a capability is missing — the full catalog is ${catalog.length} tools.`,
+        `Find tools that are not currently registered. Returns name + one-line ` +
+        `description for each match, and whether it is registered right now. ` +
+        `Then either run it once with tool_invoke, or — if you expect to use that ` +
+        `area repeatedly — register it properly with tool_profile. ` +
+        `Search before assuming a capability is missing: the full catalog is ` +
+        `${catalog.length} tools and only some are registered at any moment.`,
       inputSchema: {
         query: z.string().min(1).describe("Words to match against tool name, title and description, e.g. \"fade audio\"."),
         category: z
@@ -129,7 +159,7 @@ export function createMetaTools(catalog: AnyTool[], profile: ProfileName): AnyTo
 
         const matches = ranked.map((r) => ({
           name: r.tool.name,
-          registered: inProfile(r.tool.name, profile),
+          registered: isRegistered(r.tool.name),
           description: shortDescription(r.tool.description),
         }));
 
@@ -141,7 +171,7 @@ export function createMetaTools(catalog: AnyTool[], profile: ProfileName): AnyTo
         }
         return {
           text: `${matches.length} tool(s) match "${p.query}". Use tool_schema(name) for parameters, then tool_invoke(name, args).`,
-          data: { matches, catalogSize: catalog.length, profile },
+          data: { matches, catalogSize: catalog.length, profile: surface.current() },
         };
       },
     }),
@@ -168,7 +198,7 @@ export function createMetaTools(catalog: AnyTool[], profile: ProfileName): AnyTo
             name: tool.name,
             title: tool.title,
             description: tool.description,
-            registered: inProfile(tool.name, profile),
+            registered: isRegistered(tool.name),
             parameters: describeShape(tool.inputSchema as ZodRawShape),
           },
         };
@@ -216,5 +246,101 @@ export function createMetaTools(catalog: AnyTool[], profile: ProfileName): AnyTo
         return tool.handler(parsed.data, ctx);
       },
     }),
+
+    defineTool({
+      name: "tool_profile",
+      title: "Register more tools for yourself",
+      description:
+        `Change which tools are registered in this session — you may raise your own tool surface. ` +
+        `The session starts on a profile ("${surface.startingProfile}") to keep the tool list small, but the full ` +
+        `catalog of ${catalog.length} tools is loaded and one call away.\n` +
+        `• profile:"full" — register everything (${catalog.length} tools). Do this if you are doing complex, ` +
+        `varied work and want the whole catalog visible.\n` +
+        `• category:"color" — register just one area (repeatable, additive).\n` +
+        `• enable:["clip_trim"] — register specific tools by name.\n` +
+        `• profile:"core" — shrink back down when you are done.\n` +
+        `Call with no arguments to see the current state. ` +
+        `Prefer tool_invoke for a one-off call; use this when you expect to use an area repeatedly. ` +
+        `The tool list refreshes automatically in most clients — if yours does not show the new tools, ` +
+        `they are still callable through tool_invoke.`,
+      inputSchema: {
+        profile: z
+          .enum(["core", "standard", "full"])
+          .optional()
+          .describe("Switch the whole surface. \"full\" registers the entire catalog."),
+        category: z
+          .string()
+          .optional()
+          .describe(`Additionally register every tool with this name prefix. Known: ${categories.join(", ")}`),
+        enable: z
+          .array(z.string())
+          .optional()
+          .describe("Additionally register these exact tool names."),
+      },
+      handler: async (p): Promise<ToolOutcome> => {
+        const before = surface.registered().size;
+        const previous = surface.current();
+
+        // No arguments: report, do not change anything.
+        if (!p.profile && !p.category && !p.enable?.length) {
+          return {
+            text:
+              `Profile "${previous}" — ${before} of ${catalog.length + META_COUNT} tools registered. ` +
+              `Call tool_profile({ profile: "full" }) to register everything.`,
+            data: {
+              profile: previous,
+              startingProfile: surface.startingProfile,
+              registeredCount: before,
+              catalogSize: catalog.length,
+              available: PROFILE_ORDER,
+              categories,
+            },
+          };
+        }
+
+        const extra: string[] = [];
+        const unknown: string[] = [];
+
+        if (p.category) {
+          const prefix = `${p.category.replace(/_+$/, "")}_`;
+          const hits = catalog.filter((t) => t.name.startsWith(prefix)).map((t) => t.name);
+          if (!hits.length) unknown.push(`category:${p.category}`);
+          extra.push(...hits);
+        }
+        for (const name of p.enable ?? []) {
+          if (byName.has(name)) extra.push(name);
+          else unknown.push(name);
+        }
+
+        // Naming a profile is a reset: "back to core" must actually shrink,
+        // not keep whatever categories were pinned earlier in the session.
+        const target = p.profile ?? previous;
+        const count = surface.apply(target, extra, p.profile !== undefined);
+        const added = count - before;
+
+        const notes: string[] = [];
+        if (unknown.length) notes.push(`Not found, ignored: ${unknown.join(", ")}. Use tool_search to get exact names.`);
+        if (added > 0) notes.push("Your client should refresh its tool list shortly; tool_invoke works either way.");
+        if (added < 0) notes.push("Tools were unregistered. They remain callable via tool_invoke.");
+
+        return {
+          text:
+            `Profile "${target}"${target !== previous ? ` (was "${previous}")` : ""} — ` +
+            `${count} tools registered${added === 0 ? " (no change)" : `, ${added > 0 ? "+" : ""}${added}`}. ` +
+            notes.join(" "),
+          data: {
+            profile: target,
+            previousProfile: previous,
+            registeredCount: count,
+            delta: added,
+            catalogSize: catalog.length,
+            unknown,
+          },
+        };
+      },
+    }),
   ];
 }
+
+/** tool_search, tool_schema, tool_invoke, tool_profile. */
+const META_COUNT = 4;

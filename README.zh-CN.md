@@ -97,7 +97,7 @@ claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\no
 
 **任何其他 MCP 客户端** — Cline, Roo Code, Continue, Zed, LM Studio, JetBrains AI, Gemini CLI, Codex CLI… 把传输方式设为 **`stdio`**（有些客户端称为 "local" / "command" / "process"），命令填 Node 路径，参数填服务器路径。几乎都使用上面的 `mcpServers` 格式。只提供远程 URL 输入框的客户端无法运行 PPMCP。
 
-**`PPMCP_PROFILE`** — `core` (~19) · `standard` (~109, 默认) · `full` (277). PPMCP 注册的是一个**配置档**而非全部 277 个工具 —— 其余仍可通过 `tool_search` → `tool_schema` → `tool_invoke` 调用。
+**`PPMCP_PROFILE`** — `core` (19) · `standard` (109, 默认) · `full` (277). 这只决定会话的*起点*：模型可以用 `tool_profile({ profile: "full" })` 或 `{ category: "color" }` 自行扩展，而 `tool_invoke` 无论是否注册都能调用任何工具。
 
 ```json
 "env": { "PPMCP_PROFILE": "standard" }

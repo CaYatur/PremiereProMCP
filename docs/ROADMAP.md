@@ -21,7 +21,7 @@ counted 2026-09-04).
 | `bridge/src/` — WS relay `:8265` | 231 | Thin router, correlation-id based |
 | `shared/src/` — protocol | 102 | |
 | `legacy-bridge/` — optional CEP text bridge | — | Editable MOGRT text only |
-| `scripts/` | 40+ `.mjs`/`.ps1` | Ad-hoc probes, smoke runs, and the two CI checks |
+| `scripts/` | 40+ `.mjs`/`.ps1` | Ad-hoc probes, smoke runs, and the three CI checks |
 | `docs/` | ~2,500 lines | AGENT, AGENT_USAGE, ARCHITECTURE, FEATURES, PLAN, PROMPTS, ROADMAP, TEXT_SYSTEM |
 
 **Releases.** v1.0.0 → v1.0.2 (2026-07-10/11), then v1.1.0 (2026-09-04). MIT.
@@ -98,9 +98,16 @@ that is currently impossible — not raise the count.
   thousands of tokens for schemas it will never call.
 - **Meta-tools.** `tool_search` → `tool_schema` → `tool_invoke` keep the whole
   catalog one call away. Nothing became unreachable.
-- **CI.** Build + typecheck + `scripts/check-profiles.mjs` +
-  `scripts/check-catalog.mjs` on Windows and Linux, Node 20 and 22 — every
-  check that is meaningful without a live Premiere.
+- **`tool_profile` — the model raises its own surface.** All 277 tools are
+  registered at boot and merely disabled outside the profile, so the model can
+  turn on a category or the entire catalog mid-session; the server emits one
+  `tools/list_changed` and the client refreshes. A profile is now a starting
+  point, not a cap. Covered end-to-end by `scripts/test-tool-profile.mjs`
+  (26 assertions, no Premiere needed, runs in CI).
+- **CI.** Build + typecheck + `check-profiles` + `check-catalog` +
+  `test-tool-profile` on Windows and Linux, Node 20 and 22 — every check that
+  is meaningful without a live Premiere. `npm run check` runs the same set
+  locally.
 - **Connection docs rewritten.** Verified per-client configs for Claude
   Desktop, Claude Code, Cursor, VS Code (the `servers` + `"type": "stdio"`
   variant), Windsurf, plus a generic stdio recipe, a no-client test command,

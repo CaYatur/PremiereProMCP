@@ -74,6 +74,7 @@ edit_bootstrap
 |--|--|
 | Philosophy | Outcome-shaped tools + automatic packs, not a 1:1 API mirror |
 | Weak models | `edit_auto` / playbooks; the `standard` profile keeps the surface small |
+| Strong models | `tool_profile` lets the model register the rest of the catalog for itself, mid-session |
 | Text | Editable MOGRT with a PNG fallback and structured recovery |
 | Delivery | `polish` / `delivery` do grade + transitions + fades in one call |
 | Failure | `recovery` hint + continue the plan; never a blind retry loop |

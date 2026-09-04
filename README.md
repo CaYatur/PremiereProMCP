@@ -141,15 +141,25 @@ claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\no
 
 **Building from source** instead of the Setup ZIP? Run `npm run build`, then use `node` (system Node 18+) as the command and the absolute path to your clone's `server/dist/index.js` as the argument.
 
-### Choose how many tools the model sees
+### The tool surface — a starting point, not a cap
 
-PPMCP ships 277 tools. Registering all of them costs thousands of tokens per session and makes tool selection worse, so the server registers a **profile** and keeps the rest one call away via `tool_search` → `tool_schema` → `tool_invoke`.
+All 277 tools are loaded. A **profile** only decides how many are *registered* when the session starts, because putting 277 schemas in front of a model costs thousands of tokens and measurably worsens tool selection.
 
-| `PPMCP_PROFILE` | Registered | Use when |
-|-----------------|-----------|----------|
-| `core` | ~19 | Small/cheap models; `edit_bootstrap` → `edit_auto` → `edit_verify` only |
-| `standard` *(default)* | ~109 | Live-verified tools plus the atomics a real cut uses |
-| `full` | 277 | Entire catalog resident, as in 1.0.x |
+| `PPMCP_PROFILE` | Registered at start | Use when |
+|-----------------|--------------------|----------|
+| `core` | 19 | Small/cheap models; `edit_bootstrap` → `edit_auto` → `edit_verify` only |
+| `standard` *(default)* | 109 | Live-verified tools plus the atomics a real cut uses |
+| `full` | 277 | Entire catalog resident from the first turn, as in 1.0.x |
+
+**The model can widen this itself, mid-session.** If it decides it needs more, it calls `tool_profile` — no restart, no config edit, no asking you:
+
+```
+tool_profile { profile: "full" }     // register all 277
+tool_profile { category: "color" }   // register one area, additive
+tool_profile { enable: ["clip_reverse"] }
+```
+
+The server registers them and emits `notifications/tools/list_changed`, so your client refreshes its own tool list. Alongside that, `tool_search` finds tools that are not registered and `tool_invoke` runs any tool whether registered or not — so nothing is ever unreachable, whichever profile you pick.
 
 ```json
 "env": { "PPMCP_PROFILE": "standard" }

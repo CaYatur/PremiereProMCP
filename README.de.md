@@ -97,7 +97,7 @@ claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\no
 
 **Jeder andere MCP-Client** — Cline, Roo Code, Continue, Zed, LM Studio, JetBrains AI, Gemini CLI, Codex CLI… gib ihm Transport **`stdio`** (teils "local", "command" oder "process" genannt), den Node-Pfad als Befehl und den Server-Pfad als einziges Argument. Fast alle nutzen die `mcpServers`-Form oben. Ein Client, der nur ein Remote-URL-Feld anbietet, kann PPMCP nicht starten.
 
-**`PPMCP_PROFILE`** — `core` (~19) · `standard` (~109, Standard) · `full` (277). PPMCP registriert ein **Profil**, nicht alle 277 Tools — der Rest bleibt uber `tool_search` → `tool_schema` → `tool_invoke` erreichbar.
+**`PPMCP_PROFILE`** — `core` (19) · `standard` (109, Standard) · `full` (277). Das legt nur fest, womit die Sitzung *startet*: das Modell kann die Auswahl selbst erweitern — `tool_profile({ profile: "full" })` oder `{ category: "color" }` — und `tool_invoke` fuhrt jedes Tool aus, registriert oder nicht.
 
 ```json
 "env": { "PPMCP_PROFILE": "standard" }

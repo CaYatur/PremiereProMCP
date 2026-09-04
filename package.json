@@ -13,6 +13,7 @@
     "dev:bridge": "npm run dev --workspace=bridge",
     "dev:server": "npm run dev --workspace=server",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "check": "npm run build && npm run typecheck && node scripts/check-catalog.mjs && node scripts/check-profiles.mjs && node scripts/test-tool-profile.mjs",
     "smoke-test": "npm run build && node scripts/smoke-test.mjs",
     "smoke-all": "npm run build && node scripts/smoke-all-tools.mjs",
     "test:media": "npm run build --workspace=server && node scripts/test-media-analysis.mjs",

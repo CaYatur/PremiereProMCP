@@ -97,7 +97,7 @@ claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\no
 
 **Tout autre client MCP** — Cline, Roo Code, Continue, Zed, LM Studio, JetBrains AI, Gemini CLI, Codex CLI… donnez-lui le transport **`stdio`** (parfois appele "local", "command" ou "process"), le chemin de Node comme commande et le chemin du serveur comme unique argument. Presque tous utilisent la forme `mcpServers` ci-dessus. Un client qui ne propose qu'un champ URL distante ne peut pas lancer PPMCP.
 
-**`PPMCP_PROFILE`** — `core` (~19) · `standard` (~109, par defaut) · `full` (277). PPMCP enregistre un **profil**, pas les 277 outils — le reste reste accessible via `tool_search` → `tool_schema` → `tool_invoke`.
+**`PPMCP_PROFILE`** — `core` (19) · `standard` (109, par defaut) · `full` (277). Cela ne fixe que le point de *depart* : le modele peut elargir lui-meme sa surface avec `tool_profile({ profile: "full" })` ou `{ category: "color" }`, et `tool_invoke` execute n'importe quel outil, enregistre ou non.
 
 ```json
 "env": { "PPMCP_PROFILE": "standard" }

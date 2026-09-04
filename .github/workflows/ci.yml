@@ -48,3 +48,8 @@ jobs:
 
       - name: Tool catalog check
         run: node scripts/check-catalog.mjs
+
+      # Boots a real MCP stdio session and exercises tool_profile end-to-end.
+      # Still no Premiere: tools/list and the tool_* meta-tools are server-side.
+      - name: Tool surface switching (end-to-end MCP session)
+        run: node scripts/test-tool-profile.mjs

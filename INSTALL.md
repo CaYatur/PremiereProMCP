@@ -224,15 +224,22 @@ problem is in your client's config:
 #### Optional: choose how many tools the model sees
 
 PPMCP ships 277 tools. Registering all of them costs thousands of tokens per
-session and makes tool selection worse, so the server registers a **profile**
-by default and keeps the rest reachable through `tool_search` → `tool_schema`
-→ `tool_invoke`.
+session and makes tool selection worse, so the server **starts** on a profile.
+All 277 are loaded either way — the profile only decides how many are
+registered up front.
 
-| `PPMCP_PROFILE` | Registered | Use when |
-|-----------------|-----------|----------|
-| `core` | ~19 | Small/cheap models. `edit_bootstrap` → `edit_auto` → `edit_verify` only. |
-| `standard` *(default)* | ~109 | Everything with a recorded live pass, plus the atomics a real cut uses. |
-| `full` | 277 | You want the entire catalog resident, as in 1.0.x. |
+| `PPMCP_PROFILE` | Registered at start | Use when |
+|-----------------|--------------------|----------|
+| `core` | 19 | Small/cheap models. `edit_bootstrap` → `edit_auto` → `edit_verify` only. |
+| `standard` *(default)* | 109 | Everything with a recorded live pass, plus the atomics a real cut uses. |
+| `full` | 277 | You want the entire catalog resident from the first turn, as in 1.0.x. |
+
+**You do not have to get this right.** The model can raise its own surface
+mid-session with `tool_profile({ profile: "full" })` (or `{ category: "color" }`
+for one area); the server registers them and notifies your client, which
+refreshes its tool list. `tool_search` finds unregistered tools and
+`tool_invoke` runs any tool whether registered or not — so nothing is ever out
+of reach, whatever you set here.
 
 Set it like any other MCP env var:
 
@@ -256,7 +263,8 @@ Set it like any other MCP env var:
 | Server fails to start | Wrong path, or single backslashes in JSON | Double every backslash in `.json`; run the quick test above |
 | Tools appear, but every call returns `PLUGIN_NOT_CONNECTED` | Premiere panel not loaded, or bridge down | Start the **PPMCP Bridge** shortcut, then load the panel in UXP Developer Tool until it shows **Active** |
 | Calls return `RATE_LIMITED` | Tools fired too fast | Wait `retryAfterMs`; prefer `edit_run` batches. This guard exists because flooding Premiere crashes it |
-| A tool you expected is missing | You are on a profile | `tool_search("...")` to find it, or set `PPMCP_PROFILE=full` |
+| A tool you expected is missing | You are on a profile | Ask the model to run `tool_search`; it can register it with `tool_profile`. Or set `PPMCP_PROFILE=full` |
+| The model says it registered tools but the list looks the same | Client ignored `tools/list_changed` | Harmless — `tool_invoke` still reaches them. Restarting the client with `PPMCP_PROFILE=full` also works |
 
 ### 6. Optional CEP (if checked in the wizard)
 Restart Premiere → **Window → PPMCP Text Bridge**.

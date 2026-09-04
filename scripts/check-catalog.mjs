@@ -11,6 +11,7 @@
 import { z } from "zod";
 import { allTools } from "../server/dist/tools/index.js";
 import { createMetaTools } from "../server/dist/tools/meta.js";
+import { inProfile, META_TOOL_NAMES } from "../server/dist/toolProfiles.js";
 
 const problems = [];
 const warnings = [];
@@ -63,14 +64,26 @@ for (const tool of allTools) {
   }
 }
 
-// Meta-tools must build and must not collide with the catalog.
+// Meta-tools must build, must not collide with the catalog, and must cover
+// every name toolProfiles.ts promises is always registered.
 let metaNames = [];
+const stubSurface = {
+  startingProfile: "standard",
+  current: () => "standard",
+  registered: () => new Set(allTools.filter((t) => inProfile(t.name, "standard")).map((t) => t.name)),
+  apply: () => 0,
+};
 try {
-  const meta = createMetaTools(allTools, "standard");
+  const meta = createMetaTools(allTools, stubSurface);
   metaNames = meta.map((m) => m.name);
   for (const m of meta) {
     if (seen.has(m.name)) problems.push(`meta-tool ${m.name} collides with a catalog tool.`);
     if (typeof m.handler !== "function") problems.push(`meta-tool ${m.name}: handler is not a function.`);
+  }
+  for (const promised of META_TOOL_NAMES) {
+    if (!metaNames.includes(promised)) {
+      problems.push(`META_TOOL_NAMES lists "${promised}" but createMetaTools() does not build it.`);
+    }
   }
 } catch (err) {
   problems.push(`createMetaTools() threw: ${err?.message ?? err}`);

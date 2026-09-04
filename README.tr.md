@@ -114,15 +114,25 @@ claude mcp add premiere-pro --scope user -- "C:\Users\SEN\AppData\Local\PPMCP\no
 
 **Kaynaktan derliyorsan** (Setup ZIP yerine): `npm run build` calistir, komut olarak `node` (sistem Node 18+), argüman olarak da klonundaki `server/dist/index.js` mutlak yolunu ver.
 
-### Modelin kac arac gordugunu sec
+### Arac yuzeyi — tavan degil, baslangic noktasi
 
-PPMCP 277 arac iceriyor. Hepsini kaydetmek her oturumda binlerce token'a mal olur ve arac secimini kotulestirir — bu yuzden sunucu bir **profil** kaydeder, geri kalani `tool_search` → `tool_schema` → `tool_invoke` ile tek cagri uzaginda tutar.
+277 aracin hepsi yuklu. **Profil** yalnizca oturum baslarken kacinin *kayitli* oldugunu belirler; cunku 277 semayi birden modelin onune koymak her oturumda binlerce token'a mal olur ve arac secimini olcelebilir sekilde kotulestirir.
 
-| `PPMCP_PROFILE` | Kayitli arac | Ne zaman |
-|-----------------|--------------|----------|
-| `core` | ~19 | Kucuk/ucuz modeller; sadece `edit_bootstrap` → `edit_auto` → `edit_verify` |
-| `standard` *(varsayilan)* | ~109 | Canli dogrulanmis araclar + gercek bir kurguda kullanilan atomikler |
-| `full` | 277 | Tum katalog acik, 1.0.x'teki gibi |
+| `PPMCP_PROFILE` | Baslangicta kayitli | Ne zaman |
+|-----------------|---------------------|----------|
+| `core` | 19 | Kucuk/ucuz modeller; sadece `edit_bootstrap` → `edit_auto` → `edit_verify` |
+| `standard` *(varsayilan)* | 109 | Canli dogrulanmis araclar + gercek bir kurguda kullanilan atomikler |
+| `full` | 277 | Ilk turdan itibaren tum katalog acik, 1.0.x'teki gibi |
+
+**Model bunu oturum ortasinda kendisi genisletebilir.** Daha fazlasina ihtiyaci olduguna karar verirse `tool_profile` cagirir — yeniden baslatma yok, config duzenleme yok, sana sorma yok:
+
+```
+tool_profile { profile: "full" }     // 277 aracin hepsini kaydet
+tool_profile { category: "color" }   // tek bir alani kaydet, eklemeli
+tool_profile { enable: ["clip_reverse"] }
+```
+
+Sunucu araclari kaydedip `notifications/tools/list_changed` gonderir, istemcin kendi arac listesini tazeler. Ayrica `tool_search` kayitli olmayan araclari bulur, `tool_invoke` ise kayitli olsun olmasin her araci calistirir — yani hangi profili secersen sec hicbir sey erisilemez degildir.
 
 ```json
 "env": { "PPMCP_PROFILE": "standard" }

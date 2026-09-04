@@ -20,6 +20,17 @@ people connect to it.
   `tmp-qa/smoke-all-*.json` plus the atomics exercised in the real ~48 s
   multi-track session documented in the README. See
   `server/src/toolProfiles.ts`.
+- **`tool_profile` — the model can widen its own tool surface.** The profile
+  is a starting point, not a cap. Every one of the 277 tools is registered
+  with the MCP server at boot; the ones outside the profile are merely
+  disabled. `tool_profile({ profile: "full" })` turns them all on,
+  `{ category: "color" }` turns on one area, `{ enable: [...] }` turns on
+  named tools, and calling it with no arguments just reports the current
+  state. The server then emits `notifications/tools/list_changed` and the
+  client refreshes its own tool list — no restart, no config edit, no asking
+  the operator. Naming a profile also clears anything pinned earlier, so
+  "back to `core`" really shrinks. The whole switch emits **one**
+  notification, not one per tool.
 - **Meta-tools: `tool_search` → `tool_schema` → `tool_invoke`.** The full
   catalog stays one call away regardless of profile. `tool_search` ranks by
   name/title/description, `tool_schema` prints a tool's parameters, and
@@ -35,6 +46,14 @@ people connect to it.
 - **`scripts/check-catalog.mjs`** — fails on duplicate tool names, missing
   handlers/titles/descriptions, unusable zod shapes, or a meta-tool name
   collision. Runs without Premiere, so it can gate every push.
+- **`scripts/test-tool-profile.mjs`** — boots a real MCP stdio session and
+  exercises the whole surface-switching path end to end: starting profile,
+  finding a hidden tool, registering a category, calling the newly registered
+  tool, taking the full catalog, shrinking back, and reaching a disabled tool
+  through `tool_invoke`. 26 assertions, no Premiere required, runs in CI.
+- **`npm run check`** — build + typecheck + all three checks in one command.
+- **`PPMCP_NO_AUTOSPAWN=1`** — stops the server from auto-spawning a bridge
+  process. For tests and sandboxes.
 
 ### Changed
 
@@ -63,6 +82,13 @@ people connect to it.
 
 ### Fixed
 
+- **The meta-tools were rate-limited for no reason.** `tool_search`,
+  `tool_schema` and `tool_profile` never touch Premiere — they read the
+  in-process catalog and flip registration flags — but they were subject to
+  the ~220 ms floor that exists to stop edit spam from crashing the host. A
+  model doing `tool_search` → `tool_schema` → `tool_profile` in sequence got
+  `RATE_LIMITED` purely for orienting itself. All three are now exempt;
+  `tool_invoke` deliberately is not, because it runs a real tool.
 - **Stale status banners.** `PLAN.md` still announced "Still pre-implementation
   — 0 production code written" and `FEATURES.md` claimed "0 of these 275 exist
   as working code today", while 277 tools had been shipping since 1.0.0. Both

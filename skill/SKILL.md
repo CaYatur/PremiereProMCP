@@ -215,28 +215,51 @@ checkpoint_list
 Stored under `~/.ppmcp/checkpoints/`. Call **before** mass edits.
 
 
-## Tool profiles — a tool you cannot see is still callable
+## Your tool list is a starting point — you can extend it yourself
 
-The server registers a **profile**, not the whole catalog (277 tools). The
-default `standard` profile registers 109. If the tool you want is not in your
-tool list, **it is not missing** — reach it in three steps:
+All 277 tools are loaded. The session *registers* a profile (default
+`standard` = 109) only to keep your tool list small. **A tool you cannot see
+is not missing, and you do not need the user's permission to get it.**
+
+**One-off call** — cheapest, works regardless of client:
 
 ```
-tool_search { query: "warp stabilizer" }
-tool_schema { name: "effect_apply_warp_stabilizer" }
+tool_search { query: "warp stabilizer" }      // find the exact name
+tool_schema { name: "effect_apply_warp_stabilizer" }   // see its params
 tool_invoke { name: "effect_apply_warp_stabilizer", args: { trackIndex: 1, clipIndex: 0 } }
 ```
 
-`tool_invoke` validates against the tool's real schema and goes through the
-same rate limiter, so it behaves exactly like a direct call.
-**Never tell the user a capability is unsupported before running `tool_search`.**
+**Register it for real** — when you expect to use that area repeatedly, or
+the job is complex and varied enough that you want everything visible:
 
-Operator-side: `PPMCP_PROFILE=core` (19, weak models) / `standard` (109,
-default) / `full` (277, everything resident).
+```
+tool_profile { category: "color" }    // register one area, additive
+tool_profile { enable: ["clip_reverse", "media_relink"] }  // specific tools
+tool_profile { profile: "full" }      // register all 277 — take it if you want it
+tool_profile { }                      // just report the current state
+```
+
+The tools then appear in your own tool list (the server emits
+`tools/list_changed`). If your client does not refresh, `tool_invoke` still
+works — it never depends on registration.
+
+**When to take the whole catalog.** `profile: "full"` costs tokens on every
+later turn, so it is not free — but if you are doing varied work and keep
+hitting tools you cannot see, take it. One `tool_profile` call beats ten
+`tool_invoke` round-trips. Shrink back with `tool_profile { profile: "core" }`
+when the exploratory phase is over (naming a profile also clears anything you
+pinned earlier).
+
+**Never tell the user a capability is unsupported before running
+`tool_search`.** `tool_search`, `tool_schema` and `tool_profile` are exempt
+from the rate limiter, so orienting yourself costs no waiting.
+
+Operator-side: `PPMCP_PROFILE=core` (19) / `standard` (109, default) /
+`full` (277) sets only where the session *starts*.
 
 ## Token hygiene
 
 - `compact: true` default on orchestration tools  
 - One `edit_auto` > ten atomics  
 - Avoid dumping full effect catalogs unless needed  
-- Prefer `tool_search` over asking the user for `PPMCP_PROFILE=full`  
+- Prefer `tool_search` / `tool_profile` over asking the user to change config  
