@@ -24,7 +24,7 @@ counted 2026-09-04).
 | `scripts/` | 40+ `.mjs`/`.ps1` | Ad-hoc probes, smoke runs, and the three CI checks |
 | `docs/` | ~2,500 lines | AGENT, AGENT_USAGE, ARCHITECTURE, FEATURES, PLAN, PROMPTS, ROADMAP, TEXT_SYSTEM |
 
-**Releases.** v1.0.0 → v1.0.2 (2026-07-10/11), then v1.1.0 (2026-09-04). MIT.
+**Releases.** v1.0.0 → v1.0.2 (2026-07-10/11), v1.1.0 (2026-09-04), then v1.1.1 (2026-10-08, Premiere 26.3+ fixes). MIT.
 
 ### 1.1 What is genuinely strong — do not regress these
 

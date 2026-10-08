@@ -17,7 +17,7 @@ relay.connect();
 
 const server = new McpServer({
   name: "premiere-pro-mcp",
-  version: "1.1.0",
+  version: "1.1.1",
 });
 
 const ctx: ToolContext = { relay };

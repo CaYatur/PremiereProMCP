@@ -4,7 +4,7 @@ All notable changes to PPMCP are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.1] — 2026-10-08
 
 ### Fixed
 
@@ -267,6 +267,7 @@ pass, export, and screenshots. Atomic multi-step edits via
 `Project.executeTransaction()`, rate limiting, and file checkpoints.
 Pure-PowerShell Windows Setup with bundled portable Node.
 
+[1.1.1]: https://github.com/CaYatur/PremiereProMCP/releases/tag/v1.1.1
 [1.1.0]: https://github.com/CaYatur/PremiereProMCP/releases/tag/v1.1.0
 [1.0.2]: https://github.com/CaYatur/PremiereProMCP/releases/tag/v1.0.2
 [1.0.1]: https://github.com/CaYatur/PremiereProMCP/releases/tag/v1.0.1
