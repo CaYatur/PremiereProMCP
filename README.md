@@ -6,7 +6,7 @@
 [![Release](https://img.shields.io/github/v/release/CaYatur/PremiereProMCP)](https://github.com/CaYatur/PremiereProMCP/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-blue)
-![Tools: 277, 109 registered by default](https://img.shields.io/badge/MCP%20tools-277%20(109%20default)-orange)
+![Tools: 280, 112 registered by default](https://img.shields.io/badge/MCP%20tools-280%20(112%20default)-orange)
 
 **Developer:** [CaYaDev](https://cayadev.com) · [cayadev.com](https://cayadev.com)
 
@@ -144,18 +144,18 @@ claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\no
 
 ### The tool surface — a starting point, not a cap
 
-All 277 tools are loaded. A **profile** only decides how many are *registered* when the session starts, because putting 277 schemas in front of a model costs thousands of tokens and measurably worsens tool selection.
+All 280 tools are loaded. A **profile** only decides how many are *registered* when the session starts, because putting 280 schemas in front of a model costs thousands of tokens and measurably worsens tool selection.
 
 | `PPMCP_PROFILE` | Registered at start | Use when |
 |-----------------|--------------------|----------|
 | `core` | 19 | Small/cheap models; `edit_bootstrap` → `edit_auto` → `edit_verify` only |
-| `standard` *(default)* | 109 | Live-verified tools plus the atomics a real cut uses |
-| `full` | 277 | Entire catalog resident from the first turn, as in 1.0.x |
+| `standard` *(default)* | 112 | Live-verified tools plus the atomics a real cut uses |
+| `full` | 280 | Entire catalog resident from the first turn, as in 1.0.x |
 
 **The model can widen this itself, mid-session.** If it decides it needs more, it calls `tool_profile` — no restart, no config edit, no asking you:
 
 ```
-tool_profile { profile: "full" }     // register all 277
+tool_profile { profile: "full" }     // register all 280
 tool_profile { category: "color" }   // register one area, additive
 tool_profile { enable: ["clip_reverse"] }
 ```
@@ -261,7 +261,7 @@ Rough cuts · cinematic SFX · music-rhythm cuts · ad-style motion cards · QA 
 
 ## Tool status: what's actually tested
 
-**277 MCP tools** across ~20 categories. Since 1.1.0 the server registers a **profile** (109 by default) rather than the whole catalog — the rest stay one call away via `tool_search` → `tool_schema` → `tool_invoke`, and `PPMCP_PROFILE=full` restores the old surface. The catalog spans project, sequence, track, clip, transitions, effects — including 52 one-shot dedicated effect/audio/transition shortcuts — color/Lumetri, audio, text/titles/shapes, markers/metadata, multicam, proxy/media, export, analysis, batch, selection/system, checkpoints, agent-orchestration/edit-pipeline, plus ~22 high-level workflow tools). Most of that surface maps to a real, documented method in Adobe's own `@adobe/premierepro` UXP API. Real end-to-end sessions have now exercised a much wider slice of it than the ~48s smoke sequence below; the issues surfaced so far are the ones flagged below (see "Still broken" and "Lower-confidence claims") — see [docs/FEATURES.md](./docs/FEATURES.md) for the full tool-by-tool verification tier (type-verified / live-verified / verified-composed / known-broken).
+**280 MCP tools** across ~20 categories. Since 1.1.0 the server registers a **profile** (112 by default) rather than the whole catalog — the rest stay one call away via `tool_search` → `tool_schema` → `tool_invoke`, and `PPMCP_PROFILE=full` restores the old surface. The catalog spans project, sequence, track, clip, transitions, effects — including 52 one-shot dedicated effect/audio/transition shortcuts — color/Lumetri, audio, text/titles/shapes, markers/metadata, multicam, proxy/media, export, analysis, batch, selection/system, checkpoints, agent-orchestration/edit-pipeline, plus ~22 high-level workflow tools). Most of that surface maps to a real, documented method in Adobe's own `@adobe/premierepro` UXP API. Real end-to-end sessions have now exercised a much wider slice of it than the ~48s smoke sequence below; the issues surfaced so far are the ones flagged below (see "Still broken" and "Lower-confidence claims") — see [docs/FEATURES.md](./docs/FEATURES.md) for the full tool-by-tool verification tier (type-verified / live-verified / verified-composed / known-broken).
 
 **What holds up well under real, end-to-end testing** (a real ~48s multi-track sequence built from scratch, video + 4 audio tracks, transitions, gain, keyframed fades, markers, title, screenshot, save): sequence/project creation, `clip_overwrite`, trim, roll/slip/slide, split, ripple delete, shape add + position + fill color, `text_write`'s PNG fallback path, listing effects/transitions, gain/dB control, and project save/screenshot. **`clip_append` is now confirmed working in a real session** — it appends clips in the correct order (it previously failed with `"Script action failed to execute"`; the shared-retry fix held up live). **`sequence_set_in_out` is confirmed working too** (re-tested 2026-07-11) — it set the in/out points via `"via": "sequence.createSetInPointAction + sequence.createSetOutPointAction"`, confirming the 1.0.1 root-cause fix (the factory is on the Sequence object, not `SequenceEditor`). Multi-step edits (roll/slip/slide and composite workflow tools) are committed through Premiere's `Project.executeTransaction()` — several primitive actions run as one atomic unit, so a failure partway through doesn't leave the timeline half-edited. That transaction design has been the most reliable part of the whole plugin.
 
@@ -325,9 +325,16 @@ npm run dev:bridge
 npm run release:win    # build Setup ZIP (PowerShell wizard + portable Node)
 ```
 
-CI runs build + typecheck + both checks on Windows and Linux (Node 20 / 22).
+`npm run check` runs all of the checks above plus the end-to-end MCP session
+and release-step tests. CI runs it on Windows and Linux (Node 20 / 22).
 Anything needing a live Premiere Pro session stays in `scripts/smoke-*.mjs`
 and is run by hand.
+
+**Releases are automatic:** merging a PR into `main` bumps the version,
+dates the CHANGELOG's `[Unreleased]` section, builds the Setup ZIP and
+publishes the GitHub release. Bump labels: `release:patch` (the default),
+`release:minor`, `release:major`, or `no-release`. See
+[docs/RELEASING.md](./docs/RELEASING.md).
 
 ---
 

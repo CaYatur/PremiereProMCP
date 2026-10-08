@@ -58,3 +58,7 @@ jobs:
       # Still no Premiere: tools/list and the tool_* meta-tools are server-side.
       - name: Tool surface switching (end-to-end MCP session)
         run: node scripts/test-tool-profile.mjs
+
+      # The version-bump / CHANGELOG step of release.yml, on a scratch copy.
+      - name: Release preparation check
+        run: node scripts/test-release-prepare.mjs

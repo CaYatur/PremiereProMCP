@@ -97,7 +97,7 @@ claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\no
 
 **Cualquier otro cliente MCP** — Cline, Roo Code, Continue, Zed, LM Studio, JetBrains AI, Gemini CLI, Codex CLI… dale transporte **`stdio`** (a veces llamado "local", "command" o "process"), la ruta de Node como comando y la ruta del server como unico argumento. Casi todos usan la forma `mcpServers` de arriba. Un cliente que solo ofrece un campo de URL remota no puede ejecutar PPMCP.
 
-**`PPMCP_PROFILE`** — `core` (19) · `standard` (109, por defecto) · `full` (277). Solo decide donde *empieza* la sesion: el modelo puede ampliarla el mismo con `tool_profile({ profile: "full" })` o `{ category: "color" }`, y `tool_invoke` ejecuta cualquier herramienta este registrada o no.
+**`PPMCP_PROFILE`** — `core` (19) · `standard` (112, por defecto) · `full` (280). Solo decide donde *empieza* la sesion: el modelo puede ampliarla el mismo con `tool_profile({ profile: "full" })` o `{ category: "color" }`, y `tool_invoke` ejecuta cualquier herramienta este registrada o no.
 
 ```json
 "env": { "PPMCP_PROFILE": "standard" }
@@ -109,6 +109,6 @@ claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\no
 
 ## Estado de las herramientas
 
-277 herramientas MCP en ~20 categorias. `clip_append` ya esta confirmado funcionando y `sequence_set_in_out` ahora funciona (confirmado en vivo; llama a `sequence.createSetInPointAction`, Premiere 25.6+). Limitacion confirmada de la plataforma Adobe: la API UXP no tiene metodo para anadir pistas vacias (`track_add`) — planifica el numero de pistas al crear la secuencia. Tabla detallada y actualizada en el **[English README](./README.md#tool-status-whats-actually-tested)** o en [docs/FEATURES.md](./docs/FEATURES.md).
+280 herramientas MCP en ~20 categorias. `clip_append` ya esta confirmado funcionando y `sequence_set_in_out` ahora funciona (confirmado en vivo; llama a `sequence.createSetInPointAction`, Premiere 25.6+). Limitacion confirmada de la plataforma Adobe: la API UXP no tiene metodo para anadir pistas vacias (`track_add`) — planifica el numero de pistas al crear la secuencia. Tabla detallada y actualizada en el **[English README](./README.md#tool-status-whats-actually-tested)** o en [docs/FEATURES.md](./docs/FEATURES.md).
 
 Details: **[INSTALL.md](./INSTALL.md)** · English README for full features.

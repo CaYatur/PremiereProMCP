@@ -97,7 +97,7 @@ claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\no
 
 **任何其他 MCP 客户端** — Cline, Roo Code, Continue, Zed, LM Studio, JetBrains AI, Gemini CLI, Codex CLI… 把传输方式设为 **`stdio`**（有些客户端称为 "local" / "command" / "process"），命令填 Node 路径，参数填服务器路径。几乎都使用上面的 `mcpServers` 格式。只提供远程 URL 输入框的客户端无法运行 PPMCP。
 
-**`PPMCP_PROFILE`** — `core` (19) · `standard` (109, 默认) · `full` (277). 这只决定会话的*起点*：模型可以用 `tool_profile({ profile: "full" })` 或 `{ category: "color" }` 自行扩展，而 `tool_invoke` 无论是否注册都能调用任何工具。
+**`PPMCP_PROFILE`** — `core` (19) · `standard` (112, 默认) · `full` (280). 这只决定会话的*起点*：模型可以用 `tool_profile({ profile: "full" })` 或 `{ category: "color" }` 自行扩展，而 `tool_invoke` 无论是否注册都能调用任何工具。
 
 ```json
 "env": { "PPMCP_PROFILE": "standard" }
@@ -109,6 +109,6 @@ claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\no
 
 ## 工具状态
 
-约 20 个类别、277 个 MCP 工具。`clip_append` 现已确认可用，`sequence_set_in_out` 现已确认可用（实机确认，调用 `sequence.createSetInPointAction`，Premiere 25.6+）。已确认的 Adobe 平台限制：UXP API 没有添加空轨道的方法（`track_add`）——请在创建序列时规划好轨道数量。最新详细表格见 **[English README](./README.md#tool-status-whats-actually-tested)** 或 [docs/FEATURES.md](./docs/FEATURES.md)。
+约 20 个类别、280 个 MCP 工具。`clip_append` 现已确认可用，`sequence_set_in_out` 现已确认可用（实机确认，调用 `sequence.createSetInPointAction`，Premiere 25.6+）。已确认的 Adobe 平台限制：UXP API 没有添加空轨道的方法（`track_add`）——请在创建序列时规划好轨道数量。最新详细表格见 **[English README](./README.md#tool-status-whats-actually-tested)** 或 [docs/FEATURES.md](./docs/FEATURES.md)。
 
 详见 **[INSTALL.md](./INSTALL.md)** 与英文 README 功能说明。

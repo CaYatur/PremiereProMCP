@@ -12,6 +12,8 @@ import { z } from "zod";
 import { allTools } from "../server/dist/tools/index.js";
 import { createMetaTools } from "../server/dist/tools/meta.js";
 import { inProfile, META_TOOL_NAMES } from "../server/dist/toolProfiles.js";
+import { BLEND_MODE_NAMES } from "../server/dist/tools/effect.js";
+import fs from "node:fs";
 
 const problems = [];
 const warnings = [];
@@ -87,6 +89,24 @@ try {
   }
 } catch (err) {
   problems.push(`createMetaTools() threw: ${err?.message ?? err}`);
+}
+
+// clip_set_blend_mode's enum (server) must match the value table the plugin
+// maps it through, or a valid-looking mode fails at runtime.
+{
+  const src = fs.readFileSync(new URL("../plugin/src/handlers/effect.js", import.meta.url), "utf8");
+  const table = /const BLEND_MODES = \{([\s\S]*?)\};/.exec(src);
+  if (!table) {
+    problems.push("plugin/src/handlers/effect.js: BLEND_MODES table not found.");
+  } else {
+    const pluginModes = [...table[1].matchAll(/^\s*([a-z_]+):\s*\d+,/gm)].map((m) => m[1]).sort();
+    const serverModes = [...BLEND_MODE_NAMES].sort();
+    if (JSON.stringify(pluginModes) !== JSON.stringify(serverModes)) {
+      problems.push(
+        `Blend modes differ: server [${serverModes.join(", ")}] vs plugin [${pluginModes.join(", ")}].`,
+      );
+    }
+  }
 }
 
 const categories = [...new Set([...seen.values()])].sort();

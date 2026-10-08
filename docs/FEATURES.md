@@ -1,8 +1,8 @@
 # Feature / Tool List
 
 > **⚠ IMPLEMENTATION STATUS (updated 2026-07-11, post-install real-app
-> testing pass):** 277 MCP tools are implemented in code (server
-> `allTools`, `server/src/tools/index.ts` — counted at runtime: 225 in the
+> testing pass):** 280 MCP tools are implemented in code (server
+> `allTools`, `server/src/tools/index.ts` — counted at runtime: 228 in the
 > per-category files + 52 generated dedicated effect/audio/transition
 > shortcuts). Most of the catalog below is
 > **type-verified** — it maps to a real, documented method in
@@ -392,6 +392,33 @@ readout does not appear to be exposed to UXP.
 `color_set_color_wheels` 🔧, `color_apply_lut` 🔧, `color_match_color` ❔,
 `color_apply_creative_look` 🔧, `color_get_scopes_data` ❔, `color_copy_grade` 🔧,
 `color_paste_grade` 🔧, `color_reset_grade` 🔧
+
+**Live probe of Lumetri's params, Premiere 26.5.1 / UXP 9.3 (2026-10-08,
+issue #5).** The component exposes 130 params. What is and isn't reachable:
+
+- **Reachable:** every numeric slider (Basic Correction, Creative, Vignette,
+  HSL Secondary). `color_set_basic_correction`, `color_set_param`,
+  `effect_set_param` (`paramIndex` for duplicated names) and the relative
+  `color_adjust` / `effect_adjust_param` ✅ write them. Premiere clamps each
+  to a hard limit wider than its slider (Temperature/Tint ±300, Exposure ±7,
+  Contrast/Highlights/Shadows/Whites/Blacks ±150, Saturation 0–300).
+- **Not reachable: curves.** "RGB Curves" and "Hue Saturation Curves" are
+  only on/off toggles. The curve data (`Hue vs Sat`, `Hue vs Hue`,
+  `Hue vs Luma`, `Luma vs Sat`, `Sat vs Sat`) are opaque params
+  (`getStartValue()` → null, `areKeyframesSupported()` → false), and writing
+  any value type fails with "Illegal Parameter type". RGB curve points are
+  not exposed at all. Tone-curve-like changes have to go through
+  Highlights / Shadows / Whites / Blacks / Contrast (e.g. `color_adjust`).
+- **Not reachable: loading a LUT by path.** "Input LUT" and "Look" are
+  numeric dropdown indexes; a file path is rejected the same way, so
+  `color_apply_lut` ❌ returns an explanatory error. Load custom LUTs by hand
+  in Lumetri.
+
+**Blend modes (issue #6):** `clip_set_blend_mode` ✅ writes the Opacity
+component's first "Blend Mode" param. Values 0–26 are the dropdown's modes in
+alphabetical order, with Subtract (25) and Divide (26) appended; 18 is Normal.
+This was measured by rendering every value over a known overlay and matching
+the result against the blend formulas.
 
 ### H. Audio — `audio_*` (14)
 Core level/gain control and keyframing are verified against

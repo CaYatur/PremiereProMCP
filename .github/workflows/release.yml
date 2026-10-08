@@ -1,0 +1,140 @@
+name: Release
+
+# Merging a PR into main publishes a release:
+#   1. the version is bumped everywhere it is written down
+#      (package.json ×4, package-lock.json, plugin/manifest.json,
+#      server/src/index.ts) and the CHANGELOG's [Unreleased] section is dated,
+#   2. the checks run, the Windows Setup ZIP is built,
+#   3. a "Release vX.Y.Z" commit and the vX.Y.Z tag are pushed to main,
+#   4. a GitHub release is published with the ZIP and the [Unreleased] text as notes.
+#
+# PR labels pick the bump: release:major, release:minor, release:patch
+# (default patch). Label a PR no-release to merge it without releasing.
+#
+# On every open PR the same steps run as a dry run (nothing is pushed or
+# published; the ZIP is attached to the run as an artifact), so a broken
+# release is caught before the merge. See docs/RELEASING.md.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled, closed]
+
+permissions:
+  contents: write
+
+concurrency:
+  # Real releases run one at a time; dry runs per PR, newest wins.
+  group: ${{ github.event.pull_request.merged && 'release-main' || format('release-dry-run-{0}', github.event.pull_request.number) }}
+  cancel-in-progress: ${{ !github.event.pull_request.merged }}
+
+jobs:
+  release:
+    name: ${{ github.event.pull_request.merged && 'publish release' || 'release dry run' }}
+    if: >-
+      (github.event.action != 'closed' || github.event.pull_request.merged) &&
+      !contains(github.event.pull_request.labels.*.name, 'no-release')
+    runs-on: windows-latest
+    env:
+      PUBLISH: ${{ github.event.pull_request.merged && 'true' || 'false' }}
+      LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Publishing works on the tip of main; a dry run on the PR's merge
+      # preview (the default ref), i.e. what main would look like.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merged && 'main' || '' }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Pick the version bump from PR labels
+        id: bump
+        run: |
+          bump=patch
+          if echo "$LABELS" | grep -q '"release:major"'; then bump=major
+          elif echo "$LABELS" | grep -q '"release:minor"'; then bump=minor
+          fi
+          echo "bump=$bump" >> "$GITHUB_OUTPUT"
+          echo "Version bump: $bump (labels: $LABELS)"
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Bump version and date the CHANGELOG
+        id: prep
+        run: >-
+          node scripts/release-prepare.mjs
+          --bump "${{ steps.bump.outputs.bump }}"
+          --notes-out "$RUNNER_TEMP/release-notes.md"
+          --github-output "$GITHUB_OUTPUT"
+
+      - name: Checks
+        run: npm run check
+
+      - name: Release commit and tag (local)
+        env:
+          VERSION: ${{ steps.prep.outputs.version }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "::error::Tag v$VERSION already exists."; exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json bridge/package.json server/package.json \
+            shared/package.json plugin/manifest.json server/src/index.ts CHANGELOG.md
+          git commit -m "Release v$VERSION" -m "From #$PR_NUMBER: $PR_TITLE"
+          git tag -a "v$VERSION" -m "PPMCP v$VERSION"
+
+      # Built after the commit so whatever the build touches (npm install
+      # rewrites node_modules, sometimes the lockfile) never ends up in it.
+      - name: Build the Windows Setup ZIP
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File installer/build-release.ps1
+
+      - name: Check the ZIP
+        env:
+          VERSION: ${{ steps.prep.outputs.version }}
+        run: |
+          zip="dist-release/PPMCP-Setup-$VERSION.zip"
+          test -f "$zip" || { echo "::error::$zip was not built"; exit 1; }
+          ls -l "$zip"
+          {
+            echo "### PPMCP v$VERSION ($([ "$PUBLISH" = true ] && echo publishing || echo dry run))"
+            echo
+            cat "$RUNNER_TEMP/release-notes.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the ZIP (dry run)
+        if: env.PUBLISH != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: PPMCP-Setup-${{ steps.prep.outputs.version }}-dry-run
+          path: dist-release/PPMCP-Setup-${{ steps.prep.outputs.version }}.zip
+          retention-days: 3
+
+      - name: Push the release commit and tag
+        if: env.PUBLISH == 'true'
+        env:
+          VERSION: ${{ steps.prep.outputs.version }}
+        run: git push --atomic origin "HEAD:refs/heads/main" "refs/tags/v$VERSION"
+
+      - name: Publish the GitHub release
+        if: env.PUBLISH == 'true'
+        env:
+          VERSION: ${{ steps.prep.outputs.version }}
+        run: >-
+          gh release create "v$VERSION" "dist-release/PPMCP-Setup-$VERSION.zip"
+          --verify-tag
+          --latest
+          --title "PPMCP v$VERSION — $PR_TITLE"
+          --notes-file "$RUNNER_TEMP/release-notes.md"

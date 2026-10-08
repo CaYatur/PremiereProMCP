@@ -4,6 +4,45 @@ All notable changes to PPMCP are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Relative Lumetri adjustments (#4).** `color_adjust` adds a delta to each
+  clip's current value (`exposure: 0.3`, `saturation: -10`, any other param
+  via `deltas`, keyed by name or `"#<paramIndex>"`), so existing per-clip
+  corrections are kept. It works on one clip, a clip list or the timeline
+  selection, applies Lumetri where it's missing, clamps to Premiere's limits
+  (measured on 26.5.1) and reports what was clamped. Keyframed params are
+  skipped with a reason instead of losing their keyframes.
+- `effect_adjust_param`: the same relative change for any numeric effect
+  param, with optional `min` / `max`.
+- `edit_quality_pass` `gradeMode: "relative"` (also passed through
+  `polish`): adds the look's offset from Lumetri's defaults instead of
+  overwriting existing grades. The default is still `absolute`.
+- **Blend modes (#6).** `clip_set_blend_mode` sets any of the 27 Opacity blend
+  modes (`screen`, `linear_dodge`, `overlay`, `multiply`, …) plus optional
+  opacity, and returns the previous mode. The value table was measured live
+  by rendering every mode over a known overlay and matching the blend
+  formulas.
+- **Automatic releases.** Merging a PR into `main` now bumps the version
+  everywhere, dates this CHANGELOG, builds the Setup ZIP and publishes the
+  GitHub release (`.github/workflows/release.yml`, `scripts/release-prepare.mjs`).
+  Labels pick the bump (`release:patch` by default, `release:minor`,
+  `release:major`, `no-release`). Every PR runs it as a dry run first. See
+  `docs/RELEASING.md`.
+
+### Changed
+
+- **Lumetri curves (#5): investigated, not reachable through UXP.** On
+  26.5.1 the curve data params are opaque and reject every value type, so
+  there is no curves tool. `docs/FEATURES.md` lists what Lumetri exposes;
+  tone-curve-style changes go through Highlights / Shadows / Whites / Blacks.
+- `color_apply_lut` now explains that UXP can't load a LUT by file path
+  (Input LUT is a dropdown index) instead of failing with a value-type hint.
+- `scripts/check-catalog.mjs` checks that the server's blend-mode list
+  matches the plugin's value table.
+
 ## [1.1.1] — 2026-10-08
 
 ### Fixed

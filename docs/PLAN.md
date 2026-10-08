@@ -1,8 +1,8 @@
 # Premiere Pro MCP Server — Project Plan
 
-Status: **Shipped and in maintenance.** Phases 0–6 are complete: 277 MCP
+Status: **Shipped and in maintenance.** Phases 0–6 are complete: 280 MCP
 tools across ~20 categories, a UXP plugin, the bridge/relay, and a PowerShell
-Setup with bundled portable Node are all released (v1.0.0 → v1.1.0). The
+Setup with bundled portable Node are all released (v1.0.0 onward). The
 planning content below is kept because §3's gate research and live-probe
 findings are still the authoritative record of *why* the architecture looks
 the way it does — but it is history, not a to-do list.

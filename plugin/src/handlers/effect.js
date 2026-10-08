@@ -22,6 +22,7 @@ const {
   createKeyframeAt,
   readParamValue,
   coerceToParamType,
+  adjustParamValue,
 } = require("../ppro.js");
 
 function coerceParamValue(value) {
@@ -33,6 +34,42 @@ function coerceParamValue(value) {
   }
   return value;
 }
+
+// Values of the Opacity component's "Blend Mode" param (issue #6). Measured
+// live on Premiere 26.5.1 by rendering each value over a known overlay and
+// matching the result against the blend formulas: the list is alphabetical,
+// with Subtract and Divide (added later) at the end. 27 is accepted by the
+// param but is not a mode in the dropdown, so it is left out.
+const BLEND_MODES = {
+  color: 0,
+  color_burn: 1,
+  color_dodge: 2,
+  darken: 3,
+  darker_color: 4,
+  difference: 5,
+  dissolve: 6,
+  exclusion: 7,
+  hard_light: 8,
+  hard_mix: 9,
+  hue: 10,
+  lighten: 11,
+  lighter_color: 12,
+  linear_burn: 13,
+  linear_dodge: 14,
+  linear_light: 15,
+  luminosity: 16,
+  multiply: 17,
+  normal: 18,
+  overlay: 19,
+  pin_light: 20,
+  saturation: 21,
+  screen: 22,
+  soft_light: 23,
+  vivid_light: 24,
+  subtract: 25,
+  divide: 26,
+};
+const BLEND_MODE_NAMES = Object.fromEntries(Object.entries(BLEND_MODES).map(([k, v]) => [v, k]));
 
 async function getItem({ sequenceId, trackType, trackIndex, clipIndex }) {
   const project = await getActiveProject();
@@ -197,6 +234,58 @@ module.exports = {
       return { removed: true };
     } catch (err) {
       throw apiError("effect.remove", err);
+    }
+  },
+
+  // Relative change (issue #4): add `delta` to a numeric param's current
+  // value, clamped to optional min/max. With paramName the first numeric
+  // param of that name is used; pass paramIndex for a specific duplicate.
+  "effect.adjustParam": async (params) => {
+    const { project, item } = await getItem(params);
+    const { components } = await getComponents(item);
+    const comp = components[params.effectIndex];
+    if (!comp) {
+      const e = new Error(`No effect at index ${params.effectIndex}.`);
+      e.code = "NOT_FOUND";
+      throw e;
+    }
+    const delta = Number(params.delta);
+    if (!Number.isFinite(delta)) {
+      const e = new Error("effect.adjustParam needs a numeric delta.");
+      e.code = "INVALID_PARAMS";
+      throw e;
+    }
+    const compParams = await getComponentParams(comp);
+    let index = -1;
+    if (params.paramIndex !== undefined && params.paramIndex !== null) {
+      index = compParams[params.paramIndex] ? params.paramIndex : -1;
+    } else if (params.paramName !== undefined && params.paramName !== null) {
+      for (let i = 0; i < compParams.length && index < 0; i++) {
+        if (compParams[i].displayName !== params.paramName) continue;
+        if ((await readParamValue(compParams[i])).valueType === "number") index = i;
+      }
+    } else {
+      const e = new Error("effect.adjustParam requires paramIndex or paramName (see effect_list_applied).");
+      e.code = "INVALID_PARAMS";
+      throw e;
+    }
+    if (index < 0) {
+      const e = new Error(
+        `No numeric parameter "${params.paramIndex ?? params.paramName}" on effect at index ${params.effectIndex}. See effect_list_applied.`,
+      );
+      e.code = "NOT_FOUND";
+      throw e;
+    }
+    const param = compParams[index];
+    try {
+      const r = await adjustParamValue(project, param, delta, {
+        min: params.min,
+        max: params.max,
+        label: `PPMCP effect_adjust_param ${param.displayName}`,
+      });
+      return { paramName: param.displayName, paramIndex: index, delta, ...r };
+    } catch (err) {
+      throw apiError("effect.adjustParam", err);
     }
   },
 
@@ -384,6 +473,61 @@ module.exports = {
     } catch (err) {
       throw apiError("effect.getParam", err);
     }
+  },
+
+  // Blend mode on the built-in Opacity component (issue #6).
+  "effect.setBlendMode": async (params) => {
+    const { project, item } = await getItem(params);
+    const value = BLEND_MODES[params.mode];
+    if (value === undefined) {
+      const e = new Error(`Unknown blend mode "${params.mode}". Use one of: ${Object.keys(BLEND_MODES).join(", ")}.`);
+      e.code = "INVALID_PARAMS";
+      throw e;
+    }
+    const opacity = params.opacity;
+    if (opacity !== undefined && opacity !== null && !(Number(opacity) >= 0 && Number(opacity) <= 100)) {
+      const e = new Error("opacity must be 0–100.");
+      e.code = "INVALID_PARAMS";
+      throw e;
+    }
+    const { components } = await getComponents(item);
+    let opacityComp;
+    for (const comp of components) {
+      if ((await getComponentDisplayName(comp)) === "Opacity") {
+        opacityComp = comp;
+        break;
+      }
+    }
+    if (!opacityComp) {
+      const e = new Error("This clip has no Opacity component (blend modes apply to video clips).");
+      e.code = "NOT_FOUND";
+      throw e;
+    }
+    const compParams = await getComponentParams(opacityComp);
+    // Opacity lists two "Blend Mode" params; the first is the one the
+    // Effect Controls dropdown drives (live 26.5.1, default 18 = Normal).
+    const modeParam = compParams.find((p) => p.displayName === "Blend Mode");
+    const opacityParam = compParams.find((p) => p.displayName === "Opacity");
+    if (!modeParam) {
+      const e = new Error('No "Blend Mode" param on the Opacity component.');
+      e.code = "NOT_FOUND";
+      throw e;
+    }
+    const before = (await readParamValue(modeParam)).value;
+    await setParamValue(project, modeParam, value, "PPMCP clip_set_blend_mode");
+    if (opacity !== undefined && opacity !== null && opacityParam) {
+      await setParamValue(project, opacityParam, Number(opacity), "PPMCP clip_set_blend_mode opacity");
+    }
+    const after = await readParamValue(modeParam);
+    if (after.value !== value) {
+      throw apiError("effect.setBlendMode", new Error(`Blend Mode reads back ${after.value}, expected ${value}.`));
+    }
+    return {
+      mode: params.mode,
+      value,
+      previous: BLEND_MODE_NAMES[before] ?? before,
+      opacity: opacityParam ? (await readParamValue(opacityParam)).value : undefined,
+    };
   },
 
   "effect.setOpacity": async (params) => {
