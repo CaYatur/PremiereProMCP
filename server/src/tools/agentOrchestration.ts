@@ -440,7 +440,7 @@ export const agentOrchestrationTools = [
     name: "edit_quality_pass",
     title: "Delivery quality pass (batchable for large projects)",
     description:
-      "Lumetri + capped dissolves on a WINDOW of V clips. Default maxGrade=24 per call. LARGE projects: loop with clipFrom=nextClipFrom until hasMore=false. Never grades 200 clips in one shot (Premiere crash).",
+      "Lumetri + capped dissolves + edge fades on a WINDOW of V clips. Default maxGrade=24 per call. LARGE projects: loop with clipFrom=nextClipFrom until hasMore=false. Never grades 200 clips in one shot (Premiere crash). Hard cuts only: maxTransitions:0. No fade-in/out on the first/last clip: fadeEdges:false. WARNING: grading writes ABSOLUTE Lumetri values (Contrast/Shadows/Highlights/Saturation/Temperature/Tint per look) and overwrites any existing per-clip Lumetri correction — read values with effect_list_applied first if clips are already graded.",
     inputSchema: {
       trackIndex: z.number().int().optional().default(0),
       look: z.enum(["neutral", "warm", "cool"]).optional().default("neutral"),
@@ -450,7 +450,17 @@ export const agentOrchestrationTools = [
         .optional()
         .default(24)
         .describe("Clips to grade in THIS batch (default 24, max 60)."),
-      maxTransitions: z.number().int().optional().default(16),
+      maxTransitions: z
+        .number()
+        .int()
+        .optional()
+        .default(16)
+        .describe("Max cross-dissolves added in this batch (0–40). 0 = hard cuts, no transitions."),
+      fadeEdges: z
+        .boolean()
+        .optional()
+        .default(true)
+        .describe("Fade in the first clip of the sequence (clipFrom 0) and fade out the last one. false = no fades."),
       clipFrom: z
         .number()
         .int()
@@ -466,6 +476,7 @@ export const agentOrchestrationTools = [
         look: p.look,
         maxGrade: p.maxGrade ?? 24,
         maxTransitions: p.maxTransitions ?? 16,
+        fadeEdges: p.fadeEdges ?? true,
         clipFrom: p.clipFrom ?? 0,
         throttleMs: 60,
       });

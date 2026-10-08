@@ -241,6 +241,8 @@ Agent workflow: [docs/AGENT_USAGE.md](./docs/AGENT_USAGE.md) · [skill/SKILL.md]
 ### Color, polish, export
 
 - **`quality_pass`** (batched for large timelines), transitions, export  
+  - `edit_quality_pass { maxTransitions: 0 }` grades with hard cuts (no dissolves); `fadeEdges: false` also skips the sequence fade-in/out.  
+  - Grading sets **absolute** Lumetri values per look, so it overwrites existing per-clip corrections. Check current values with `effect_list_applied` / `color_get_params` first on already-graded timelines.  
 
 ### Safety
 

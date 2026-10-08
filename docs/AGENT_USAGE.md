@@ -294,6 +294,10 @@ edit_quality_pass { look: "cool", maxGrade: 24, clipFrom: 24 }
 | `clipFrom` | Track clip listesinde başlangıç |
 | `nextClipFrom` | Cevap — sonraki `clipFrom` |
 | `hasMore` | `true` ise döngü devam |
+| `maxTransitions` | Bu batch’te en fazla kaç dissolve (default 16). **`0` = sadece sert kesme, geçiş yok** |
+| `fadeEdges` | `false` ise ilk clip fade-in / son clip fade-out eklenmez (default `true`) |
+
+> ⚠️ Renk düzeltmesi **mutlak** Lumetri değerleri yazar (Contrast/Shadows/Highlights/Saturation/Temperature/Tint). Clip’lerde zaten Lumetri düzeltmesi varsa üzerine yazılır — önce `effect_list_applied` veya `color_get_params` ile mevcut değerleri oku.
 
 - Fade-in: sadece `clipFrom: 0`  
 - Fade-out: sadece son batch  
