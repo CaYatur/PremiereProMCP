@@ -385,12 +385,23 @@ function tickTime(ticksString) {
   return ppro.TickTime.createWithTicks(String(ticksString));
 }
 
-/** A keyframe holding `value` at `ticks`. ComponentParam.createKeyframe()
- * takes only the value (a second time argument is silently ignored, which
- * put every keyframe at 0); the time goes on Keyframe.position. */
-function createKeyframeAt(param, value, ticks) {
+/** A keyframe holding `value` at sequence time `seqTicks` on track item
+ * `item`. ComponentParam.createKeyframe() takes only the value (a second
+ * time argument is silently ignored, which put every keyframe at 0); the
+ * time goes on Keyframe.position, which is in the clip's source-media time
+ * (live 26.5: position 5 s on a clip with in-point 4 s placed at 10 s on
+ * the timeline lands at 11 s). Tools take sequence time, so map it across,
+ * scaling for speed changes. */
+async function createKeyframeAt(item, param, value, seqTicks) {
+  const start = BigInt((await item.getStartTime()).ticks);
+  const end = BigInt((await item.getEndTime()).ticks);
+  const inPoint = BigInt((await item.getInPoint()).ticks);
+  const outPoint = BigInt((await item.getOutPoint()).ticks);
+  const offset = BigInt(seqTicks) - start;
+  const timelineLen = end - start;
+  const sourceOffset = timelineLen > 0n ? (offset * (outPoint - inPoint)) / timelineLen : offset;
   const keyframe = param.createKeyframe(value);
-  keyframe.position = tickTime(ticks);
+  keyframe.position = tickTime(String(inPoint + sourceOffset));
   return keyframe;
 }
 

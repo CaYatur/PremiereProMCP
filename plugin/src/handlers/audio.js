@@ -34,6 +34,27 @@ const {
 /** Rubber-band top in dB (Premiere clip volume line max). */
 const LEVEL_MAX_DB = 15;
 
+async function resolveAudioFilterName(requested) {
+  let names;
+  try {
+    names = await ppro.AudioFilterFactory.getDisplayNames();
+  } catch {
+    return requested;
+  }
+  if (!Array.isArray(names) || names.includes(requested)) return requested;
+  const wanted = requested.replace(/^(AE\.)?ADBE\s+/i, "").trim().toLowerCase();
+  const exact = names.find((n) => n.toLowerCase() === wanted);
+  if (exact) return exact;
+  const similar = names.filter((n) => n.toLowerCase().includes(wanted) || wanted.includes(n.toLowerCase()));
+  const e = new Error(
+    `No audio effect named "${requested}". ${
+      similar.length ? `Did you mean: ${similar.slice(0, 8).join(", ")}?` : `Available: ${names.join(", ")}.`
+    }`,
+  );
+  e.code = "INVALID_PARAMS";
+  throw e;
+}
+
 async function getItem({ sequenceId, trackIndex, clipIndex }) {
   const project = await getActiveProject();
   const sequence = await getSequence(project, sequenceId);
@@ -240,7 +261,7 @@ module.exports = {
           /* */
         }
       }
-      const keyframe = createKeyframeAt(level, linear, params.atTicks);
+      const keyframe = await createKeyframeAt(item, level, linear, params.atTicks);
       runTransaction(project, "PPMCP audio_add_volume_keyframe", (c) => {
         // Created inside lockedAccess (required since Premiere 26.3).
         const action = level.createAddKeyframeAction(keyframe);
@@ -274,12 +295,15 @@ module.exports = {
   "audio.addEffect": async (params) => {
     const { project, item } = await getItem(params);
     try {
-      const displayName = params.displayName || params.matchName;
-      if (!displayName) {
+      const requested = params.displayName || params.matchName;
+      if (!requested) {
         const e = new Error("audio.addEffect requires displayName (or matchName used as display name).");
         e.code = "INVALID_PARAMS";
         throw e;
       }
+      // AudioFilterFactory only creates by display name ("Dynamics"), so map
+      // a video-style matchName ("AE.ADBE Dynamics") or a case slip onto one.
+      const displayName = await resolveAudioFilterName(requested);
       const component = await ppro.AudioFilterFactory.createComponentByDisplayName(displayName, item);
       if (!component) {
         throw new Error(`AudioFilterFactory.createComponentByDisplayName("${displayName}") returned null.`);

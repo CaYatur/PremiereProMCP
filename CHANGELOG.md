@@ -38,7 +38,10 @@ All notable changes to PPMCP are documented here. Format loosely follows
   - `clip_slide` passed an absolute time to `createMoveAction`, which takes a
     relative offset, so the clip jumped far down the timeline.
   - `clip_ripple_delete` left the gap open because the linked audio stayed
-    behind; the linked half is now removed with it.
+    behind; the linked half is now removed with it. `clip_lift` also lifts
+    the linked half, as Premiere's Lift does.
+  - `clip_move` failed with "Invalid parameter" whenever the new start was
+    past the clip's old end; it now uses a single relative move.
   - `clip_roll` / `clip_slide` / `clip_slip` accepted edits that ran past the
     start or end of the media; they now return `INVALID_PARAMS`.
   - Several time edits in one transaction are validated against the state
@@ -48,7 +51,13 @@ All notable changes to PPMCP are documented here. Format loosely follows
   value; the time passed as a second argument was ignored. `effect_set_param`,
   `effect_set_opacity`, `effect_set_transform` and `audio_add_volume_keyframe`
   now set `Keyframe.position`, and `effect_set_param` also switches the param
-  to time-varying first.
+  to time-varying first. `Keyframe.position` is in the clip's source-media
+  time, so `atTicks` (sequence time, as the workflow tools already pass it)
+  is mapped across using the clip's start and in-point.
+- `audio_add_effect` only accepts display names ("Dynamics"); the tool
+  advertised matchNames like "AE.ADBE Dynamics" that always failed. The
+  prefix is now ignored, case doesn't matter, and an unknown name returns the
+  closest matches.
 - `project_create_bin` created the bin but then failed with
   `bin.getId is not a function`.
 - Errors the plugin raises for bad arguments (`INVALID_PARAMS`, `NOT_FOUND`)

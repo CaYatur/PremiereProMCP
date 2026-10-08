@@ -281,7 +281,7 @@ module.exports = {
       }
       try {
         if (params.atTicks !== undefined) {
-          const keyframe = createKeyframeAt(param, value, params.atTicks);
+          const keyframe = await createKeyframeAt(item, param, value, params.atTicks);
           await runTransaction(project, "PPMCP effect_set_param (keyframe)", (c) => {
             // Created inside lockedAccess (required since Premiere 26.3).
             // A keyframe on a param that isn't time-varying just overwrites
@@ -411,7 +411,7 @@ module.exports = {
         } catch {
           /* optional */
         }
-        const keyframe = createKeyframeAt(param, params.opacity, params.atTicks);
+        const keyframe = await createKeyframeAt(item, param, params.opacity, params.atTicks);
         runTransaction(project, "PPMCP effect_set_opacity keyframe", (c) => {
           // Created inside lockedAccess (required since Premiere 26.3).
           const action = param.createAddKeyframeAction(keyframe);
@@ -462,7 +462,7 @@ module.exports = {
       } catch {
         /* optional */
       }
-      const keyframe = createKeyframeAt(param, value, atTicks);
+      const keyframe = await createKeyframeAt(item, param, value, atTicks);
       runTransaction(project, `PPMCP effect_set_transform ${label} kf`, (c) => {
         // Created inside lockedAccess (required since Premiere 26.3).
         const action = param.createAddKeyframeAction(keyframe);

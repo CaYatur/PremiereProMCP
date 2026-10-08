@@ -455,21 +455,17 @@ module.exports = {
       e.code = "INVALID_PARAMS";
       throw e;
     }
-    // Prefer absolute reposition via createSetStartAction + createSetEndAction
-    // (preserves duration). createMoveAction's TickTime is treated as a delta
-    // offset (live: "move to 0" was a no-op after a prior move).
+    // createMoveAction's TickTime is a delta offset (live: "move to 0" was a
+    // no-op after a prior move). setStart + setEnd in one transaction is not
+    // a move: setStart trims the head, and on 26.5 the pair fails with
+    // "Invalid parameter" whenever the new start is past the old end.
     try {
       const start = BigInt((await item.getStartTime()).ticks);
-      const end = BigInt((await item.getEndTime()).ticks);
-      const duration = end - start;
       const newStart = BigInt(newStartTicks);
-      const newEnd = newStart + duration;
-      if (typeof item.createSetStartAction === "function" && typeof item.createSetEndAction === "function") {
-        await runTransaction(project, "PPMCP clip_move", (c) => {
-          c.addAction(item.createSetStartAction(tickTime(String(newStart))));
-          c.addAction(item.createSetEndAction(tickTime(String(newEnd))));
-        });
-        return { moved: true, newStartTicks, via: "setStart/setEnd" };
+      if (newStart < 0n) {
+        const e = new Error(`newStartTicks ${newStartTicks} is before the start of the sequence.`);
+        e.code = "INVALID_PARAMS";
+        throw e;
       }
       const delta = newStart - start;
       await runTransaction(project, "PPMCP clip_move", (c) => {
@@ -696,13 +692,20 @@ module.exports = {
     try {
       const editor = await getEditor(sequence);
       const selection = await buildSingleItemSelection(sequence, item);
-      const mediaType = trackType === "audio" ? ppro.Constants.MediaType.AUDIO : ppro.Constants.MediaType.VIDEO;
+      // Lift the linked audio/video half with it, as Premiere's Lift does.
+      const partners = await findLinkedPartners(sequence, item, trackType);
+      for (const p of partners) selection.addItem(p.item);
+      const mediaType = partners.length
+        ? ppro.Constants.MediaType.ANY
+        : trackType === "audio"
+          ? ppro.Constants.MediaType.AUDIO
+          : ppro.Constants.MediaType.VIDEO;
       await runTransaction(project, "PPMCP clip_lift", (c) => {
         // Created inside lockedAccess (required since Premiere 26.3).
         const action = editor.createRemoveItemsAction(selection, false, mediaType);
         c.addAction(action);
       });
-      return { deleted: true, rippled: false };
+      return { deleted: true, rippled: false, linkedDeleted: partners.length };
     } catch (err) {
       throw apiError("clip.lift", err);
     }

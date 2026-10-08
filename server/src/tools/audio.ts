@@ -87,11 +87,12 @@ export const audioTools = [
   defineTool({
     name: "audio_add_effect",
     title: "Add an audio effect",
-    description: 'Apply an audio effect to a clip by matchName, e.g. "AHFN Noise Reduction", "AE.ADBE Parametric EQ", "AE.ADBE Dynamics".',
+    description:
+      'Apply an audio effect to a clip by its display name (passed as matchName), e.g. "Parametric Equalizer", "Dynamics", "DeNoise", "Hard Limiter". An "AE.ADBE " prefix is ignored; an unknown name returns the closest matches.',
     inputSchema: { ...clipRef, matchName: z.string() },
     handler: async (p, ctx) => {
-      const data = await ctx.relay.call("audio.addEffect", p);
-      return { text: `Added audio effect ${p.matchName}.`, data };
+      const data = (await ctx.relay.call("audio.addEffect", p)) as { displayName?: string } | undefined;
+      return { text: `Added audio effect ${data?.displayName ?? p.matchName}.`, data };
     },
   }),
 
