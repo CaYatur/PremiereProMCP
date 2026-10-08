@@ -61,7 +61,14 @@ function recoveryHint(code: string, message: string): string | undefined {
   if (code === "NO_ACTIVE_SEQUENCE") return "sequence_create / set_active before edit";
   if (code === "TIMEOUT") return "Retry once; check Premiere UI not modal-blocked";
   if (code === "RATE_LIMITED") return "Wait retryAfterMs; slow down; use edit_run not tool spam";
-  if (/Illegal Parameter type/i.test(message)) return "String text via UXP fails — use Text Bridge or PNG";
+  if (/Illegal Parameter type/i.test(message)) {
+    // Only text params hit the known UXP string-write limitation; for numeric
+    // / checkbox params the value type simply doesn't match (issue #2).
+    if (/valueType=string|\btext\b|title|content|mogrt/i.test(message)) {
+      return "String text via UXP fails — use Text Bridge or PNG";
+    }
+    return "Value type doesn't match the param — check valueType/paramIndex via effect_list_applied (number for sliders, true/false for checkboxes)";
+  }
   if (/not found|NOT_FOUND/i.test(code + message)) return "List resources then retry with valid id/index";
   return undefined;
 }

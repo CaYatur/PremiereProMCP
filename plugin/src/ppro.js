@@ -295,6 +295,88 @@ async function setParamValue(project, param, value, description) {
   }
 }
 
+// --- Param value reading / type coercion (issue #2) -----------------------
+//
+// ComponentParam.getStartValue() resolves to a Keyframe whose `.value` is a
+// `{ value: number | string | boolean | PointF | Color }` wrapper (26.x
+// declarations). Unwrap defensively — some builds return the raw value.
+
+function unwrapParamValue(v) {
+  let x = v;
+  for (let i = 0; i < 3 && x && typeof x === "object" && "value" in x; i++) x = x.value;
+  return x;
+}
+
+/** JSON-safe view of a param value (PointF/Color objects don't serialize). */
+function serializeParamValue(v) {
+  if (v === null || v === undefined) return v;
+  if (typeof v === "number" || typeof v === "string" || typeof v === "boolean") return v;
+  if (typeof v === "object") {
+    if ("x" in v && "y" in v) return { x: Number(v.x), y: Number(v.y) };
+    if ("red" in v && "green" in v && "blue" in v) {
+      return { r: Number(v.red), g: Number(v.green), b: Number(v.blue), a: v.alpha === undefined ? undefined : Number(v.alpha) };
+    }
+  }
+  try {
+    return String(v);
+  } catch {
+    return undefined;
+  }
+}
+
+function paramValueType(v) {
+  if (v === null || v === undefined) return "unknown";
+  if (typeof v === "object") {
+    if ("x" in v && "y" in v) return "point";
+    if ("red" in v && "green" in v && "blue" in v) return "color";
+    return "object";
+  }
+  return typeof v;
+}
+
+/** Best-effort read of a param's current (start) value. Never throws. */
+async function readParamValue(param) {
+  const out = { value: undefined, valueType: "unknown", keyframed: undefined };
+  try {
+    if (typeof param.isTimeVarying === "function") out.keyframed = !!(await param.isTimeVarying());
+  } catch {
+    /* not supported for this param */
+  }
+  try {
+    if (typeof param.getStartValue === "function") {
+      const raw = unwrapParamValue(await param.getStartValue());
+      out.value = serializeParamValue(raw);
+      out.valueType = paramValueType(raw);
+    }
+  } catch {
+    /* some params (e.g. group headers, opaque data) can't be read */
+  }
+  return out;
+}
+
+/** Coerce a tool-supplied value to the param's current value type, so
+ * "20" → 20 for sliders and "true" → true for checkboxes. Throws
+ * INVALID_PARAMS for values that can't be converted. */
+function coerceToParamType(valueType, raw) {
+  if (valueType === "number") {
+    const n = typeof raw === "boolean" ? (raw ? 1 : 0) : Number(raw);
+    if (typeof raw === "object" || raw === "" || !Number.isFinite(n)) {
+      const e = new Error(`This parameter takes a number; got ${JSON.stringify(raw)}.`);
+      e.code = "INVALID_PARAMS";
+      throw e;
+    }
+    return n;
+  }
+  if (valueType === "boolean") {
+    if (raw === true || raw === "true" || raw === 1 || raw === "1") return true;
+    if (raw === false || raw === "false" || raw === 0 || raw === "0") return false;
+    const e = new Error(`This parameter takes true/false; got ${JSON.stringify(raw)}.`);
+    e.code = "INVALID_PARAMS";
+    throw e;
+  }
+  return raw;
+}
+
 // --- Type-declaration only (docs/PLAN.md §3) — not yet individually live-tested ---
 
 function tickTime(ticksString) {
@@ -401,4 +483,6 @@ module.exports = {
   asFolderItem,
   isBinItem,
   getBinChildren,
+  readParamValue,
+  coerceToParamType,
 };
