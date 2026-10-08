@@ -1619,6 +1619,7 @@ async function runOpInner(ctx: ToolContext, step: EditOp): Promise<OpResult> {
         sequenceId: step.sequenceId,
         maxGrade: step.maxGrade ?? 24,
         maxTransitions: step.maxTransitions ?? 16,
+        fadeEdges: step.fadeEdges,
         throttleMs: 60,
       });
       if (qp.ok) steps.push("quality_pass");

@@ -8,7 +8,13 @@ const clipRef = {
   clipIndex: z.number().int(),
 };
 
-const paramValue = z.union([z.number(), z.string(), z.boolean(), z.object({ x: z.number(), y: z.number() })]);
+const paramValue = z.union([
+  z.number(),
+  z.string(),
+  z.boolean(),
+  z.object({ x: z.number(), y: z.number() }),
+  z.object({ r: z.number(), g: z.number(), b: z.number(), a: z.number().optional() }),
+]);
 
 export const effectTools = [
   defineTool({
@@ -53,7 +59,8 @@ export const effectTools = [
   defineTool({
     name: "effect_list_applied",
     title: "List effects applied to a clip",
-    description: "List effects currently applied to a clip, with each effect's index and its parameters (name, current value).",
+    description:
+      "List effects currently applied to a clip, with each effect's index and its parameters: paramIndex, displayName, current value, valueType (number/boolean/string/point/color) and keyframed flag (best-effort; unreadable params show value undefined). Params whose name repeats inside an effect (e.g. Lumetri Basic vs Creative \"Saturation\") are flagged duplicateName — address those by paramIndex in effect_set_param. Read values first to make relative changes instead of overwriting existing corrections.",
     inputSchema: clipRef,
     handler: async (p, ctx) => {
       const data = await ctx.relay.call("effect.listApplied", p);
@@ -65,17 +72,30 @@ export const effectTools = [
     name: "effect_set_param",
     title: "Set an effect parameter",
     description:
-      "Set a parameter value on an applied effect, either as a static value or as a keyframe at a specific time. Provide atTicks to add/update a keyframe instead of the static value. Point values: {x,y}; colors: {r,g,b,a}.",
+      "Set a parameter value on an applied effect, either as a static value or as a keyframe at a specific time. Identify the param by paramIndex (preferred — from effect_list_applied, unambiguous) or paramName. With paramName, every param of that exact name is tried in order and the first that accepts the value wins (Lumetri repeats names across tabs). The value is coerced to the param's current type (\"20\" → 20 for sliders, \"true\" → true for checkboxes). Provide atTicks to add/update a keyframe instead of the static value. Point values: {x,y}; colors: {r,g,b,a}.",
     inputSchema: {
       ...clipRef,
       effectIndex: z.number().int(),
-      paramName: z.string(),
+      paramIndex: z
+        .number()
+        .int()
+        .optional()
+        .describe("Index of the param inside the effect (from effect_list_applied). Takes precedence over paramName."),
+      paramName: z.string().optional().describe("Param display name. Required unless paramIndex is given."),
       value: paramValue,
       atTicks: z.string().optional().describe("If given, sets a keyframe at this time instead of a static value."),
     },
     handler: async (p, ctx) => {
-      const data = await ctx.relay.call("effect.setParam", p);
-      return { text: `Set ${p.paramName} = ${JSON.stringify(p.value)}${p.atTicks ? ` at ${p.atTicks} ticks` : ""}.`, data };
+      if (p.paramIndex === undefined && p.paramName === undefined) {
+        throw new Error("[INVALID_PARAMS] effect_set_param needs paramIndex or paramName — call effect_list_applied to find them.");
+      }
+      const data = (await ctx.relay.call("effect.setParam", p)) as { paramName?: string; paramIndex?: number } | undefined;
+      const label = data?.paramName ?? p.paramName ?? `#${p.paramIndex}`;
+      const idx = data?.paramIndex ?? p.paramIndex;
+      return {
+        text: `Set ${label}${idx !== undefined ? ` (paramIndex ${idx})` : ""} = ${JSON.stringify(p.value)}${p.atTicks ? ` at ${p.atTicks} ticks` : ""}.`,
+        data,
+      };
     },
   }),
 

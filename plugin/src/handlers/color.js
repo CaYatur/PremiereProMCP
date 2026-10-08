@@ -3,7 +3,21 @@
 // is no dedicated Lumetri API — it's applied/parameterized through the
 // same generic effect-component mechanism as any other effect.
 
-const { apiError, ppro, getActiveProject, getSequence, getTrack, getTrackItems, getComponents, getComponentDisplayName, getComponentParams, setParamValue, runTransaction } = require("../ppro.js");
+const {
+  apiError,
+  ppro,
+  getActiveProject,
+  getSequence,
+  getTrack,
+  getTrackItems,
+  getComponents,
+  getComponentDisplayName,
+  getComponentParams,
+  setParamValue,
+  runTransaction,
+  readParamValue,
+  coerceToParamType,
+} = require("../ppro.js");
 
 const LUMETRI_MATCH_NAME = "AE.ADBE Lumetri";
 
@@ -61,14 +75,27 @@ module.exports = {
       throw e;
     }
     const compParams = await getComponentParams(comp);
-    const param = compParams.find((p) => p.displayName === params.paramName);
-    if (!param) {
+    const candidates = compParams.filter((p) => p.displayName === params.paramName);
+    if (!candidates.length) {
       const e = new Error(`No Lumetri parameter "${params.paramName}" found. Use color_get_params to see available names.`);
       e.code = "NOT_FOUND";
       throw e;
     }
-    await setParamValue(project, param, params.value, "PPMCP color_set_param");
-    return { set: true };
+    // Lumetri repeats names across tabs; first same-named param that accepts
+    // a value of its own type wins (issue #2).
+    const failures = [];
+    for (const param of candidates) {
+      try {
+        const { valueType } = await readParamValue(param);
+        const value = coerceToParamType(valueType, params.value);
+        param.createKeyframe(value); // type dry-run, no mutation
+        await setParamValue(project, param, value, "PPMCP color_set_param");
+        return { set: true, paramIndex: compParams.indexOf(param) };
+      } catch (err) {
+        failures.push(err && err.message ? err.message : String(err));
+      }
+    }
+    throw apiError("color.setParam", new Error(`"${params.paramName}": ${failures.join(" ;; ")}`));
   },
 
   "color.getParams": async (params) => {
@@ -76,7 +103,12 @@ module.exports = {
     const comp = await findLumetriComponent(item);
     if (!comp) return { applied: false, params: [] };
     const compParams = await getComponentParams(comp);
-    return { applied: true, params: compParams.map((p) => ({ displayName: p.displayName })) };
+    const out = [];
+    for (let i = 0; i < compParams.length; i++) {
+      const { value, valueType, keyframed } = await readParamValue(compParams[i]);
+      out.push({ paramIndex: i, displayName: compParams[i].displayName, value, valueType, keyframed });
+    }
+    return { applied: true, params: out };
   },
 
   "color.applyLut": async (params) => {

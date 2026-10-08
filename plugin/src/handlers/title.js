@@ -76,10 +76,13 @@ async function insertMogrt({ sequenceId, trackIndex, atTicks, durationTicks, tem
 
   if (durationTicks && durationTicks !== DEFAULT_DURATION_TICKS) {
     try {
-      const action = created.createSetEndAction(
-        tickTime((BigInt(atTicks) + BigInt(durationTicks)).toString()),
-      );
-      runTransaction(project, "PPMCP text/shape duration", (c) => c.addAction(action));
+      runTransaction(project, "PPMCP text/shape duration", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = created.createSetEndAction(
+          tickTime((BigInt(atTicks) + BigInt(durationTicks)).toString()),
+        );
+        c.addAction(action);
+      });
     } catch {
       /* non-fatal */
     }
@@ -137,17 +140,17 @@ async function trySetTextParam(project, param, text) {
         continue;
       }
       // Prefer createSetValueAction(keyframe); some builds take a second arg.
-      let action;
-      try {
-        action = param.createSetValueAction(kf, true);
-      } catch {
-        action = param.createSetValueAction(kf);
-      }
-      if (!action) {
-        errors.push(`${cand.kind}: createSetValueAction returned null`);
-        continue;
-      }
-      await runTransaction(project, `PPMCP text_set (${cand.kind})`, (c) => c.addAction(action));
+      // Created inside lockedAccess (required since Premiere 26.3).
+      await runTransaction(project, `PPMCP text_set (${cand.kind})`, (c) => {
+        let action;
+        try {
+          action = param.createSetValueAction(kf, true);
+        } catch {
+          action = param.createSetValueAction(kf);
+        }
+        if (!action) throw new Error("createSetValueAction returned null");
+        c.addAction(action);
+      });
       return { ok: true, kind: cand.kind };
     } catch (e) {
       errors.push(`${cand.kind}: ${e && e.message ? e.message : e}`);
@@ -156,14 +159,20 @@ async function trySetTextParam(project, param, text) {
   // Last resort: createSetTimeVarying + add keyframe at 0
   try {
     if (typeof param.createSetTimeVaryingAction === "function") {
-      const tv = param.createSetTimeVaryingAction(true);
-      await runTransaction(project, "PPMCP text timeVarying", (c) => c.addAction(tv));
+      await runTransaction(project, "PPMCP text timeVarying", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const tv = param.createSetTimeVaryingAction(true);
+        c.addAction(tv);
+      });
     }
     const kf = param.createKeyframe(String(text));
     if (typeof param.createAddKeyframeAction === "function") {
       // Some signatures take (keyframe) only; others need time on the keyframe.
-      const action = param.createAddKeyframeAction(kf);
-      await runTransaction(project, "PPMCP text addKeyframe", (c) => c.addAction(action));
+      await runTransaction(project, "PPMCP text addKeyframe", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = param.createAddKeyframeAction(kf);
+        c.addAction(action);
+      });
       return { ok: true, kind: "addKeyframe-after-timeVarying" };
     }
   } catch (e) {

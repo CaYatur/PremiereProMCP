@@ -15,7 +15,7 @@ import { placeText } from "../textEngine.js";
 // Category N — timeline graph walks + real ffmpeg DSP / STT when available.
 
 type TrackRow = { trackType: string; trackIndex: number; name?: string; clipCount?: number };
-type ClipRow = { clipIndex: number; name?: string; startTicks?: string; endTicks?: string };
+type ClipRow = { clipIndex: number; name?: string; startTicks?: string; endTicks?: string; projectItemId?: string };
 type ProjectItem = { id: string; name: string; isBin: boolean; children?: ProjectItem[] };
 
 function big(s: string | undefined): bigint | undefined {
@@ -224,11 +224,34 @@ export const analyzeTools = [
     name: "analyze_find_unused_media",
     title: "Find unused media",
     description:
-      "List project-panel media items whose names do not appear as timeline clip names in any sequence. Best-effort name match (UXP does not always expose projectItemId on timeline clips); may miss renames and nested sequences.",
-    inputSchema: {},
-    handler: async (_p, ctx) => {
-      const rootItems = (await ctx.relay.call("project.listItems", { recursive: true })) as ProjectItem[];
+      "List project-panel media items (bins skipped) that are not used by any clip on any track of any sequence. Compares by projectItemId in a single plugin-side scan (fast on large projects); falls back to display-name matching only for clips whose source item can't be resolved. Sequences are excluded unless includeSequences:true.",
+    inputSchema: {
+      includeSequences: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe("Also report sequence items that are not nested anywhere."),
+    },
+    handler: async (p, ctx) => {
+      try {
+        // Single relay call; generous timeout for big projects.
+        const data = (await ctx.relay.call(
+          "project.findUnusedMedia",
+          { includeSequences: !!p.includeSequences },
+          120000,
+        )) as { unusedCount: number; mediaItemCount: number; sequenceCount: number };
+        return {
+          text: `Unused media: ${data.unusedCount} of ${data.mediaItemCount} item(s) across ${data.sequenceCount} sequence(s) (matched by projectItemId).`,
+          data,
+        };
+      } catch (err) {
+        // Older plugin without project.findUnusedMedia: server-side walk,
+        // still compared by id where the plugin reports one.
+        if (!/No handler registered/i.test(err instanceof Error ? err.message : String(err))) throw err;
+      }
+      const rootItems = (await ctx.relay.call("project.listItems", { recursive: true }, 60000)) as ProjectItem[];
       const media = flattenProjectItems(rootItems);
+      const usedIds = new Set<string>();
       const usedNames = new Set<string>();
       const sequences = (await ctx.relay.call("sequence.list", {})) as Array<{ sequenceId?: string; id?: string }>;
       for (const s of sequences) {
@@ -237,23 +260,26 @@ export const analyzeTools = [
           const { tracks } = await loadTimeline(ctx, sequenceId);
           for (const t of tracks) {
             for (const c of t.clips) {
-              if (c.name) usedNames.add(c.name);
+              if (c.projectItemId) usedIds.add(c.projectItemId);
+              else if (c.name) usedNames.add(c.name);
             }
           }
         } catch {
           /* skip sequences that fail to load */
         }
       }
-      const unused = media.filter((m) => !usedNames.has(m.name));
+      const unused = media.filter((m) => !usedIds.has(m.id) && !usedNames.has(m.name));
       const data = {
         unused,
         unusedCount: unused.length,
         mediaItemCount: media.length,
-        usedNameCount: usedNames.size,
+        usedItemCount: usedIds.size,
+        nameMatchedClips: usedNames.size,
+        method: "legacy-walk",
         caveat:
-          "Match is by display name only — renamed timeline clips or shared names can produce false positives/negatives.",
+          "Plugin is older than the server: used the slower multi-call walk. Update the PPMCP panel for the single-call scan. Sequence items are included.",
       };
-      return { text: `Unused media (name match): ${unused.length} of ${media.length} item(s).`, data };
+      return { text: `Unused media (legacy walk): ${unused.length} of ${media.length} item(s).`, data };
     },
   }),
 

@@ -19,6 +19,9 @@ const {
   findParamByLabel,
   runTransaction,
   tickTime,
+  createKeyframeAt,
+  readParamValue,
+  coerceToParamType,
 } = require("../ppro.js");
 
 function coerceParamValue(value) {
@@ -43,6 +46,18 @@ async function getItem({ sequenceId, trackType, trackIndex, clipIndex }) {
     throw e;
   }
   return { project, item };
+}
+
+/** The type a tool-supplied value most naturally represents. */
+function naturalValueType(raw) {
+  if (typeof raw === "number") return "number";
+  if (typeof raw === "boolean") return "boolean";
+  if (raw && typeof raw === "object") return "x" in raw ? "point" : "r" in raw ? "color" : "object";
+  if (typeof raw === "string") {
+    if (raw.trim() !== "" && Number.isFinite(Number(raw))) return "number";
+    if (raw === "true" || raw === "false") return "boolean";
+  }
+  return "string";
 }
 
 /** Build a VideoFilterComponent from a matchName or display name. */
@@ -123,11 +138,21 @@ module.exports = {
       const comp = components[i];
       const displayName = await getComponentDisplayName(comp);
       const params_ = await getComponentParams(comp);
-      result.push({
-        effectIndex: i,
-        displayName,
-        params: params_.map((p, pi) => ({ paramIndex: pi, displayName: p.displayName })),
-      });
+      const seen = new Map();
+      const entries = [];
+      for (let pi = 0; pi < params_.length; pi++) {
+        const p = params_[pi];
+        // Current value + keyframed flag, best effort (issue #2): lets a
+        // caller make relative changes without overwriting existing work.
+        const { value, valueType, keyframed } = await readParamValue(p);
+        const name = p.displayName;
+        seen.set(name, (seen.get(name) || 0) + 1);
+        entries.push({ paramIndex: pi, displayName: name, value, valueType, keyframed });
+      }
+      // Lumetri repeats names across tabs (Saturation, Sharpen…): flag them
+      // so callers use paramIndex instead of an ambiguous paramName.
+      for (const e of entries) if (seen.get(e.displayName) > 1) e.duplicateName = true;
+      result.push({ effectIndex: i, displayName, params: entries });
     }
     return result;
   },
@@ -164,8 +189,11 @@ module.exports = {
         e.code = "NOT_FOUND";
         throw e;
       }
-      const action = chain.createRemoveComponentAction(comp);
-      runTransaction(project, "PPMCP effect_remove", (c) => c.addAction(action));
+      runTransaction(project, "PPMCP effect_remove", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = chain.createRemoveComponentAction(comp);
+        c.addAction(action);
+      });
       return { removed: true };
     } catch (err) {
       throw apiError("effect.remove", err);
@@ -182,47 +210,109 @@ module.exports = {
       throw e;
     }
     const compParams = await getComponentParams(comp);
-    let param;
-    let resolvedName = params.paramName;
-    if (params.paramIndex !== undefined && params.paramIndex !== null) {
-      param = compParams[params.paramIndex];
-      resolvedName = param ? param.displayName || `index:${params.paramIndex}` : undefined;
-    } else if (params.paramName !== undefined && params.paramName !== null) {
-      // Exact match first; empty-string and whitespace names are valid (Simple Text Content)
-      param = compParams.find((p) => p.displayName === params.paramName);
-      if (!param && String(params.paramName).toLowerCase() === "content") {
+    const hasIndex = params.paramIndex !== undefined && params.paramIndex !== null;
+    const hasName = params.paramName !== undefined && params.paramName !== null;
+    if (!hasIndex && !hasName) {
+      const e = new Error("effect.setParam requires paramIndex or paramName (see effect_list_applied).");
+      e.code = "INVALID_PARAMS";
+      throw e;
+    }
+    // Candidate params, in order. Lumetri repeats display names across its
+    // tabs (Basic/Creative "Saturation", "Sharpen"…) and some same-named
+    // entries are not writable with a plain value, so try every exact match
+    // in order and keep the first that accepts the write (issue #2).
+    let candidates = [];
+    if (hasIndex) {
+      const p = compParams[params.paramIndex];
+      if (p) candidates = [{ param: p, index: params.paramIndex }];
+    } else {
+      candidates = compParams
+        .map((p, index) => ({ param: p, index }))
+        .filter(({ param }) => param.displayName === params.paramName);
+      if (!candidates.length) {
+        const lower = String(params.paramName).toLowerCase();
+        candidates = compParams
+          .map((p, index) => ({ param: p, index }))
+          .filter(({ param }) => typeof param.displayName === "string" && param.displayName.toLowerCase() === lower);
+      }
+      if (!candidates.length && String(params.paramName).toLowerCase() === "content") {
         // pymiere: Simple Text props = [?, Position, Justification, Size, Opacity, Content]
         // On this build Content often has blank/space displayName at first or last index.
-        param =
-          compParams.find((p) => !p.displayName || !String(p.displayName).trim()) ||
-          compParams[0] ||
-          compParams[compParams.length - 1];
-        resolvedName = "Content(blank)";
+        const blank = compParams.findIndex((p) => !p.displayName || !String(p.displayName).trim());
+        const index = blank >= 0 ? blank : 0;
+        if (compParams[index]) candidates = [{ param: compParams[index], index, label: "Content(blank)" }];
       }
     }
-    if (!param) {
+    if (!candidates.length) {
       const e = new Error(
-        `No parameter "${params.paramName ?? params.paramIndex}" on effect at index ${params.effectIndex}. Available: ${compParams
+        `No parameter "${hasIndex ? params.paramIndex : params.paramName}" on effect at index ${params.effectIndex}. Available: ${compParams
           .map((p, i) => `${i}:${JSON.stringify(p.displayName)}`)
           .join(", ")}`,
       );
       e.code = "NOT_FOUND";
       throw e;
     }
-    const value = coerceParamValue(params.value);
-    if (params.atTicks !== undefined) {
+
+    // Read every candidate's current value/type once, then try the ones
+    // whose type matches the supplied value first (e.g. a numeric "120"
+    // prefers a number-typed "Saturation" over a same-named text/opaque one).
+    for (const cand of candidates) cand.current = await readParamValue(cand.param);
+    const natural = naturalValueType(params.value);
+    candidates.sort((x, y) => Number(y.current.valueType === natural) - Number(x.current.valueType === natural));
+
+    const failures = [];
+    for (const cand of candidates) {
+      const { param, index, current } = cand;
+      let value;
       try {
-        const { tickTime } = require("../ppro.js");
-        const keyframe = param.createKeyframe(value, tickTime(params.atTicks));
-        const action = param.createAddKeyframeAction(keyframe);
-        runTransaction(project, "PPMCP effect_set_param (keyframe)", (c) => c.addAction(action));
+        value = coerceParamValue(coerceToParamType(current.valueType, params.value));
       } catch (err) {
-        throw apiError("effect.setParam(keyframe)", err);
+        failures.push(`#${index} (valueType=${current.valueType}): ${err.message}`);
+        continue;
       }
-    } else {
-      await setParamValue(project, param, value, "PPMCP effect_set_param");
+      try {
+        // Dry-run the type check first: createKeyframe() is not an action and
+        // doesn't mutate anything, so a wrong-typed duplicate fails here
+        // before setParamValue touches its time-varying state.
+        param.createKeyframe(value);
+      } catch (err) {
+        failures.push(`#${index} (valueType=${current.valueType}): ${err && err.message ? err.message : err}`);
+        continue;
+      }
+      try {
+        if (params.atTicks !== undefined) {
+          const keyframe = await createKeyframeAt(item, param, value, params.atTicks);
+          await runTransaction(project, "PPMCP effect_set_param (keyframe)", (c) => {
+            // Created inside lockedAccess (required since Premiere 26.3).
+            // A keyframe on a param that isn't time-varying just overwrites
+            // its static value, so switch time-varying on first.
+            if (!current.keyframed && typeof param.createSetTimeVaryingAction === "function") {
+              c.addAction(param.createSetTimeVaryingAction(true));
+            }
+            c.addAction(param.createAddKeyframeAction(keyframe));
+          });
+        } else {
+          await setParamValue(project, param, value, "PPMCP effect_set_param");
+        }
+        return {
+          set: true,
+          paramName: cand.label || param.displayName || `index:${index}`,
+          paramIndex: index,
+          previousValue: current.value,
+          value: typeof value === "object" ? params.value : value,
+          triedCandidates: failures.length ? failures : undefined,
+        };
+      } catch (err) {
+        failures.push(`#${index} (valueType=${current.valueType}): ${err && err.message ? err.message : err}`);
+      }
     }
-    return { set: true, paramName: resolvedName };
+    const e = new Error(
+      `effect.setParam: could not set "${hasIndex ? `index ${params.paramIndex}` : params.paramName}" on effect ${params.effectIndex}. ` +
+        `Tried ${failures.length} candidate(s): ${failures.join(" ;; ")}. ` +
+        `Use effect_list_applied to see each param's paramIndex, valueType and current value.`,
+    );
+    e.code = "PREMIERE_API_ERROR";
+    throw e;
   },
 
   /** Probe: try writing a string to every param on an effect (for Simple Text Content discovery). */
@@ -321,9 +411,12 @@ module.exports = {
         } catch {
           /* optional */
         }
-        const keyframe = param.createKeyframe(params.opacity, tickTime(params.atTicks));
-        const action = param.createAddKeyframeAction(keyframe);
-        runTransaction(project, "PPMCP effect_set_opacity keyframe", (c) => c.addAction(action));
+        const keyframe = await createKeyframeAt(item, param, params.opacity, params.atTicks);
+        runTransaction(project, "PPMCP effect_set_opacity keyframe", (c) => {
+          // Created inside lockedAccess (required since Premiere 26.3).
+          const action = param.createAddKeyframeAction(keyframe);
+          c.addAction(action);
+        });
         return { opacity: params.opacity, atTicks: String(params.atTicks), keyframed: true };
       } catch (err) {
         throw apiError("effect.setOpacity(keyframe)", err);
@@ -369,9 +462,12 @@ module.exports = {
       } catch {
         /* optional */
       }
-      const keyframe = param.createKeyframe(value, tickTime(atTicks));
-      const action = param.createAddKeyframeAction(keyframe);
-      runTransaction(project, `PPMCP effect_set_transform ${label} kf`, (c) => c.addAction(action));
+      const keyframe = await createKeyframeAt(item, param, value, atTicks);
+      runTransaction(project, `PPMCP effect_set_transform ${label} kf`, (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = param.createAddKeyframeAction(keyframe);
+        c.addAction(action);
+      });
       return { keyframed: true, atTicks };
     }
     try {

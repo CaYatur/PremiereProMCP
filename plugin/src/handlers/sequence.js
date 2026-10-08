@@ -1,4 +1,15 @@
-const { ppro, apiError, getActiveProject, getSequence, sequenceIdOf, getTrackCount, getEditor, runTransaction } = require("../ppro.js");
+const {
+  ppro,
+  apiError,
+  getActiveProject,
+  getSequence,
+  sequenceIdOf,
+  getTrackCount,
+  getEditor,
+  runTransaction,
+  asFolderItem,
+  getBinChildren,
+} = require("../ppro.js");
 
 async function sequenceSummary(sequence) {
   return {
@@ -262,8 +273,8 @@ module.exports = {
       if (targetBinPath && targetBinPath.length) {
         let current = await project.getRootItem();
         for (const segment of targetBinPath) {
-          const children = await current.getItems();
-          const next = children.find((c) => c.name === segment);
+          const children = await getBinChildren(current);
+          const next = asFolderItem(children.find((c) => c.name === segment));
           if (!next) {
             const e = new Error(`Bin path segment "${segment}" not found.`);
             e.code = "NOT_FOUND";

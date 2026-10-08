@@ -19,7 +19,9 @@ const TRACK_ITEM_TYPE_CLIP = 1;
 
 function apiError(context, err) {
   const e = new Error(`${context}: ${err && err.message ? err.message : String(err)}`);
-  e.code = "PREMIERE_API_ERROR";
+  // Keep a code we set ourselves (INVALID_PARAMS, NOT_FOUND, ...) so a
+  // rejected argument isn't reported as a Premiere failure.
+  e.code = err && typeof err.code === "string" && /^[A-Z_]+$/.test(err.code) ? err.code : "PREMIERE_API_ERROR";
   return e;
 }
 
@@ -295,10 +297,161 @@ async function setParamValue(project, param, value, description) {
   }
 }
 
+// --- Param value reading / type coercion (issue #2) -----------------------
+//
+// ComponentParam.getStartValue() resolves to a Keyframe whose `.value` is a
+// `{ value: number | string | boolean | PointF | Color }` wrapper (26.x
+// declarations). Unwrap defensively — some builds return the raw value.
+
+function unwrapParamValue(v) {
+  let x = v;
+  for (let i = 0; i < 3 && x && typeof x === "object" && "value" in x; i++) x = x.value;
+  return x;
+}
+
+/** JSON-safe view of a param value (PointF/Color objects don't serialize). */
+function serializeParamValue(v) {
+  if (v === null || v === undefined) return v;
+  if (typeof v === "number" || typeof v === "string" || typeof v === "boolean") return v;
+  if (typeof v === "object") {
+    if ("x" in v && "y" in v) return { x: Number(v.x), y: Number(v.y) };
+    if ("red" in v && "green" in v && "blue" in v) {
+      return { r: Number(v.red), g: Number(v.green), b: Number(v.blue), a: v.alpha === undefined ? undefined : Number(v.alpha) };
+    }
+  }
+  try {
+    return String(v);
+  } catch {
+    return undefined;
+  }
+}
+
+function paramValueType(v) {
+  if (v === null || v === undefined) return "unknown";
+  if (typeof v === "object") {
+    if ("x" in v && "y" in v) return "point";
+    if ("red" in v && "green" in v && "blue" in v) return "color";
+    return "object";
+  }
+  return typeof v;
+}
+
+/** Best-effort read of a param's current (start) value. Never throws. */
+async function readParamValue(param) {
+  const out = { value: undefined, valueType: "unknown", keyframed: undefined };
+  try {
+    if (typeof param.isTimeVarying === "function") out.keyframed = !!(await param.isTimeVarying());
+  } catch {
+    /* not supported for this param */
+  }
+  try {
+    if (typeof param.getStartValue === "function") {
+      const raw = unwrapParamValue(await param.getStartValue());
+      out.value = serializeParamValue(raw);
+      out.valueType = paramValueType(raw);
+    }
+  } catch {
+    /* some params (e.g. group headers, opaque data) can't be read */
+  }
+  return out;
+}
+
+/** Coerce a tool-supplied value to the param's current value type, so
+ * "20" → 20 for sliders and "true" → true for checkboxes. Throws
+ * INVALID_PARAMS for values that can't be converted. */
+function coerceToParamType(valueType, raw) {
+  if (valueType === "number") {
+    const n = typeof raw === "boolean" ? (raw ? 1 : 0) : Number(raw);
+    if (typeof raw === "object" || raw === "" || !Number.isFinite(n)) {
+      const e = new Error(`This parameter takes a number; got ${JSON.stringify(raw)}.`);
+      e.code = "INVALID_PARAMS";
+      throw e;
+    }
+    return n;
+  }
+  if (valueType === "boolean") {
+    if (raw === true || raw === "true" || raw === 1 || raw === "1") return true;
+    if (raw === false || raw === "false" || raw === 0 || raw === "0") return false;
+    const e = new Error(`This parameter takes true/false; got ${JSON.stringify(raw)}.`);
+    e.code = "INVALID_PARAMS";
+    throw e;
+  }
+  return raw;
+}
+
 // --- Type-declaration only (docs/PLAN.md §3) — not yet individually live-tested ---
 
 function tickTime(ticksString) {
   return ppro.TickTime.createWithTicks(String(ticksString));
+}
+
+/** A keyframe holding `value` at sequence time `seqTicks` on track item
+ * `item`. ComponentParam.createKeyframe() takes only the value (a second
+ * time argument is silently ignored, which put every keyframe at 0); the
+ * time goes on Keyframe.position, which is in the clip's source-media time
+ * (live 26.5: position 5 s on a clip with in-point 4 s placed at 10 s on
+ * the timeline lands at 11 s). Tools take sequence time, so map it across,
+ * scaling for speed changes. */
+async function createKeyframeAt(item, param, value, seqTicks) {
+  const start = BigInt((await item.getStartTime()).ticks);
+  const end = BigInt((await item.getEndTime()).ticks);
+  const inPoint = BigInt((await item.getInPoint()).ticks);
+  const outPoint = BigInt((await item.getOutPoint()).ticks);
+  const offset = BigInt(seqTicks) - start;
+  const timelineLen = end - start;
+  const sourceOffset = timelineLen > 0n ? (offset * (outPoint - inPoint)) / timelineLen : offset;
+  const keyframe = param.createKeyframe(value);
+  keyframe.position = tickTime(String(inPoint + sourceOffset));
+  return keyframe;
+}
+
+// --- Bins (issue #2) ----------------------------------------------------
+//
+// FolderItem.getItems() returns generic ProjectItem objects. A child bin
+// does NOT expose getItems() until it is cast with ppro.FolderItem.cast()
+// (Adobe docs + community confirmation), so the old
+// `typeof child.getItems === "function"` test reported every nested bin as
+// a plain item and `bin.getItems is not a function` when walking into one.
+// Detect bins by ProjectItem.type === ProjectItem.TYPE_BIN (26.x types),
+// falling back to a cast attempt when `type` is unavailable.
+
+function binTypeConstant() {
+  try {
+    if (ppro.ProjectItem && typeof ppro.ProjectItem.TYPE_BIN === "number") return ppro.ProjectItem.TYPE_BIN;
+  } catch {
+    /* fall through */
+  }
+  return 2; // value reported by Adobe staff/community for bins
+}
+
+/** Return a FolderItem for `item` if it is a bin (or the root), else null. */
+function asFolderItem(item) {
+  if (!item) return null;
+  // Already a FolderItem (e.g. the root from getRootItem(), or a cast bin).
+  // Plain ProjectItems never expose getItems(), so this cannot misfire.
+  if (typeof item.getItems === "function") return item;
+  const type = item.type;
+  if (typeof type === "number" && type !== binTypeConstant()) return null;
+  try {
+    if (ppro.FolderItem && typeof ppro.FolderItem.cast === "function") {
+      const folder = ppro.FolderItem.cast(item);
+      if (folder && typeof folder.getItems === "function") return folder;
+    }
+  } catch {
+    /* not castable */
+  }
+  return null;
+}
+
+function isBinItem(item) {
+  return asFolderItem(item) !== null;
+}
+
+/** Children of a bin as ProjectItem[]; [] when `bin` is not a folder. */
+async function getBinChildren(bin) {
+  const folder = asFolderItem(bin);
+  if (!folder) return [];
+  return (await folder.getItems()) || [];
 }
 
 /** Shared by clip.js (clip_insert/overwrite) and media.js (proxy/multicam
@@ -307,10 +460,10 @@ function tickTime(ticksString) {
  * method, not a .nodeId property — live-confirmed wrong 2026-07-10. */
 async function findProjectItemById(project, projectItemId) {
   async function search(bin) {
-    const children = await bin.getItems();
+    const children = await getBinChildren(bin);
     for (const child of children) {
       if ((await child.getId()) === projectItemId) return child;
-      if (typeof child.getItems === "function") {
+      if (isBinItem(child)) {
         const found = await search(child).catch(() => undefined);
         if (found) return found;
       }
@@ -348,5 +501,11 @@ module.exports = {
   runTransaction,
   setParamValue,
   tickTime,
+  createKeyframeAt,
   findProjectItemById,
+  asFolderItem,
+  isBinItem,
+  getBinChildren,
+  readParamValue,
+  coerceToParamType,
 };

@@ -1,4 +1,15 @@
-const { ppro, apiError, getActiveProject, findProjectItemById, runTransaction } = require("../ppro.js");
+const {
+  ppro,
+  apiError,
+  getActiveProject,
+  findProjectItemById,
+  runTransaction,
+  asFolderItem: asBin,
+  isBinItem,
+  getBinChildren,
+  sequenceIdOf,
+  getTrackItems,
+} = require("../ppro.js");
 
 async function projectSummary(project) {
   const sequences = await project.getSequences();
@@ -10,28 +21,50 @@ async function projectSummary(project) {
 }
 
 function asFolderItem(item) {
-  if (ppro.FolderItem && typeof ppro.FolderItem.cast === "function") {
-    try {
-      return ppro.FolderItem.cast(item);
-    } catch {
-      return item;
-    }
+  return asBin(item) || item;
+}
+
+/** Create bin `name` under `parent` and return it as a FolderItem. Uses
+ * project.createBin() if a build exposes it; otherwise the documented
+ * FolderItem.createBinAction inside a locked transaction. */
+async function createBinIn(project, parent, name) {
+  const folder = asFolderItem(parent);
+  if (typeof project.createBin === "function") {
+    return asFolderItem(await project.createBin(name, folder));
   }
-  return item;
+  await runTransaction(project, `PPMCP create bin ${name}`, (c) => {
+    c.addAction(folder.createBinAction(name, false));
+  });
+  const created = await findChildBin(folder, name);
+  if (!created) throw new Error(`Created bin "${name}" but could not find it afterwards.`);
+  return created;
+}
+
+async function findChildBin(folder, segment) {
+  const children = await getBinChildren(folder);
+  const match = children.find((c) => c.name === segment && isBinItem(c));
+  return match ? asBin(match) : null;
 }
 
 async function resolveOrCreateBin(project, binPath, createIfMissing = true) {
-  let current = await project.getRootItem();
+  let current = asBin(await project.getRootItem());
+  const walked = [];
   for (const segment of binPath) {
-    const children = await current.getItems();
-    let next = children.find((c) => c.name === segment);
+    walked.push(segment);
+    let next = await findChildBin(current, segment);
     if (!next) {
       if (!createIfMissing) {
-        const e = new Error(`Bin path segment "${segment}" not found.`);
+        const children = await getBinChildren(current);
+        const sameName = children.find((c) => c.name === segment);
+        const e = new Error(
+          sameName
+            ? `"${walked.join("/")}" exists but is not a bin.`
+            : `Bin path segment "${segment}" not found (looked in "${walked.slice(0, -1).join("/") || "<root>"}").`,
+        );
         e.code = "NOT_FOUND";
         throw e;
       }
-      next = await project.createBin(segment, current);
+      next = await createBinIn(project, current, segment);
     }
     current = next;
   }
@@ -39,14 +72,14 @@ async function resolveOrCreateBin(project, binPath, createIfMissing = true) {
 }
 
 async function listItems(bin, recursive) {
-  const children = await bin.getItems();
+  const children = await getBinChildren(bin);
   const result = [];
   for (const child of children) {
-    const isBin = typeof child.getItems === "function";
+    const isBin = isBinItem(child);
     const entry = {
       name: child.name,
       id: await child.getId(),
-      isBin: !!isBin,
+      isBin,
     };
     if (isBin && recursive) {
       entry.children = await listItems(child, true);
@@ -57,9 +90,9 @@ async function listItems(bin, recursive) {
 }
 
 async function walkItems(bin, path = [], visit) {
-  const children = await bin.getItems();
+  const children = await getBinChildren(bin);
   for (const child of children) {
-    const isBin = typeof child.getItems === "function";
+    const isBin = isBinItem(child);
     await visit(child, path, isBin);
     if (isBin) {
       await walkItems(child, [...path, child.name], visit);
@@ -142,8 +175,11 @@ module.exports = {
         ? await resolveOrCreateBin(project, parentBinPath)
         : await project.getRootItem();
     try {
-      const bin = await project.createBin(name, parent);
-      return { name: bin.name, id: await bin.getId() };
+      const bin = await createBinIn(project, parent, name);
+      // A FolderItem.cast() result has no getId() on 26.x; read the id from
+      // the plain ProjectItem the parent lists.
+      const listed = (await getBinChildren(parent)).find((c) => c.name === name && isBinItem(c));
+      return { name: bin.name || name, id: listed ? await listed.getId() : undefined };
     } catch (err) {
       throw apiError("project.createBin", err);
     }
@@ -170,8 +206,11 @@ module.exports = {
       if (typeof folder.createMoveItemAction !== "function") {
         throw new Error("FolderItem.createMoveItemAction not available.");
       }
-      const action = folder.createMoveItemAction(item, folder);
-      await runTransaction(project, "PPMCP project_move_item", (c) => c.addAction(action));
+      await runTransaction(project, "PPMCP project_move_item", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = folder.createMoveItemAction(item, folder);
+        c.addAction(action);
+      });
       return { moved: true, projectItemId, destBinPath: destBinPath || [] };
     } catch (err) {
       throw apiError("project.moveItem", err);
@@ -189,14 +228,14 @@ module.exports = {
       let foundParent = null;
       await walkItems(await project.getRootItem(), [], async (child, path, isBin) => {
         if (isBin) {
-          const kids = await child.getItems();
+          const kids = await getBinChildren(child);
           for (const k of kids) {
             if ((await k.getId()) === projectItemId) foundParent = child;
           }
         }
       });
       // Also check root-level children
-      const rootKids = await (await project.getRootItem()).getItems();
+      const rootKids = await getBinChildren(await project.getRootItem());
       for (const k of rootKids) {
         if ((await k.getId()) === projectItemId) foundParent = await project.getRootItem();
       }
@@ -204,8 +243,11 @@ module.exports = {
       if (typeof parent.createRemoveItemAction !== "function") {
         throw new Error("FolderItem.createRemoveItemAction not available.");
       }
-      const action = parent.createRemoveItemAction(item);
-      await runTransaction(project, "PPMCP project_delete_item", (c) => c.addAction(action));
+      await runTransaction(project, "PPMCP project_delete_item", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = parent.createRemoveItemAction(item);
+        c.addAction(action);
+      });
       return { deleted: true, projectItemId };
     } catch (err) {
       throw apiError("project.deleteItem", err);
@@ -230,6 +272,92 @@ module.exports = {
       return matches.filter((m) => m.path.length === 0);
     }
     return matches;
+  },
+
+  /** One-call unused-media scan (issue #2). The old server-side version
+   * made several relay round-trips per sequence/track (each throttled) and
+   * timed out on a 107-item project; it also compared by display name and
+   * counted bins as media. This walks every sequence's clip track items in
+   * the plugin, collects their source projectItem ids, and compares by id
+   * (name match only for track items whose project item can't be resolved). */
+  "project.findUnusedMedia": async ({ includeSequences } = {}) => {
+    const project = await getActiveProject();
+
+    // 1) Every non-bin project item, with its bin path.
+    const media = [];
+    await walkItems(await project.getRootItem(), [], async (child, path, isBin) => {
+      if (isBin) return;
+      let id;
+      try {
+        id = await child.getId();
+      } catch {
+        return;
+      }
+      let isSequence = false;
+      try {
+        if (ppro.ClipProjectItem && typeof ppro.ClipProjectItem.cast === "function") {
+          const clip = ppro.ClipProjectItem.cast(child);
+          if (clip && typeof clip.isSequence === "function") isSequence = !!(await clip.isSequence());
+        }
+      } catch {
+        /* not a clip project item */
+      }
+      media.push({ id, name: child.name, path, isSequence });
+    });
+
+    // 2) Source project item of every clip on every track of every sequence.
+    const usedIds = new Set();
+    const unresolvedNames = new Set();
+    const sequences = (await project.getSequences()) || [];
+    let trackItemCount = 0;
+    const sequenceErrors = [];
+    for (const sequence of sequences) {
+      try {
+        for (const kind of ["video", "audio"]) {
+          const count = kind === "audio" ? await sequence.getAudioTrackCount() : await sequence.getVideoTrackCount();
+          for (let t = 0; t < count; t++) {
+            const track = kind === "audio" ? await sequence.getAudioTrack(t) : await sequence.getVideoTrack(t);
+            if (!track) continue;
+            const items = (await getTrackItems(track)) || [];
+            for (const ti of items) {
+              trackItemCount++;
+              try {
+                const pi = await ti.getProjectItem();
+                const pid = pi && typeof pi.getId === "function" ? await pi.getId() : undefined;
+                if (pid) {
+                  usedIds.add(pid);
+                  continue;
+                }
+              } catch {
+                /* fall through to name */
+              }
+              try {
+                const n = await ti.getName();
+                if (n) unresolvedNames.add(n);
+              } catch {
+                /* ignore */
+              }
+            }
+          }
+        }
+      } catch (err) {
+        sequenceErrors.push(`${sequence.name || sequenceIdOf(sequence)}: ${err && err.message ? err.message : err}`);
+      }
+    }
+
+    const candidates = includeSequences ? media : media.filter((m) => !m.isSequence);
+    const unused = candidates.filter((m) => !usedIds.has(m.id) && !unresolvedNames.has(m.name));
+    return {
+      unused: unused.map(({ id, name, path, isSequence }) => ({ id, name, path, isSequence: isSequence || undefined })),
+      unusedCount: unused.length,
+      mediaItemCount: candidates.length,
+      sequenceCount: sequences.length,
+      trackItemCount,
+      usedItemCount: usedIds.size,
+      nameMatchedTrackItems: unresolvedNames.size,
+      sequenceErrors: sequenceErrors.length ? sequenceErrors : undefined,
+      method: "projectItemId",
+    };
   },
 
   "project.findOffline": async () => {
