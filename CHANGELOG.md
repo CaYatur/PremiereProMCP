@@ -4,6 +4,37 @@ All notable changes to PPMCP are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); this project uses
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Premiere 26.3+ "Requires locked access" (#2).** Since Premiere 26.3 every
+  `create*Action()` call must run inside `project.lockedAccess()`. 44 call
+  sites built the action before entering `runTransaction()`, so `clip_slip`,
+  roll/slide/split/ripple-delete/lift, transitions, track/media/project-item
+  ops and keyframed effect writes failed on 26.3+. All actions are now created
+  inside the lock. `clip_slip` also keeps in < out during the edit and rejects
+  slips past the media start. New CI check:
+  `scripts/check-action-lock-scope.mjs`.
+- **Bins (#2).** Nested bins are cast with `FolderItem.cast()` and detected by
+  `ProjectItem.TYPE_BIN`, so `project_list_items` with `binPath` works, bins
+  report `isBin: true`, and media inside bins can be found by id.
+- **`effect_set_param` (#2):** new `paramIndex`, value coerced to the param's
+  type, duplicate Lumetri names tried in order; the "String text via UXP"
+  hint now only appears for text params.
+- **`analyze_find_unused_media` (#2):** one plugin-side scan compared by
+  `projectItemId` instead of many throttled relay calls (timed out on large
+  projects).
+- **`sequence_screenshot` (#2):** reports the window-capture error instead of
+  only the fallback `export.frame` timeout.
+
+### Added
+
+- `effect_list_applied` / `color_get_params` return each param's current
+  value, `valueType`, `keyframed` and `duplicateName`.
+- `edit_quality_pass` `fadeEdges` option; documented `maxTransitions: 0`
+  (hard cuts) and that grading writes absolute Lumetri values.
+
 ## [1.1.0] — 2026-09-04
 
 Quality-of-life release. Nothing about how edits are performed changed — this
