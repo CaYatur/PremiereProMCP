@@ -27,6 +27,32 @@ All notable changes to PPMCP are documented here. Format loosely follows
   projects).
 - **`sequence_screenshot` (#2):** reports the window-capture error instead of
   only the fallback `export.frame` timeout.
+- **Timeline edits, verified live on Premiere 26.5.1.** The lock fix made
+  these reachable for the first time on 26.3+, which exposed older bugs:
+  - `clip_split` inserted a full-length copy of the clip (and shifted the rest
+    of the track) instead of cutting it. It now trims, clones into the freed
+    space and re-fits the clone, and splits the linked audio too.
+  - `clip_slip` moved the clip on the timeline (the TrackItem in/out setters
+    trim). It now trims, moves back and extends, so the clip stays put; large
+    slips are done in steps.
+  - `clip_slide` passed an absolute time to `createMoveAction`, which takes a
+    relative offset, so the clip jumped far down the timeline.
+  - `clip_ripple_delete` left the gap open because the linked audio stayed
+    behind; the linked half is now removed with it.
+  - `clip_roll` / `clip_slide` / `clip_slip` accepted edits that ran past the
+    start or end of the media; they now return `INVALID_PARAMS`.
+  - Several time edits in one transaction are validated against the state
+    before it, so these tools now apply one edit per transaction (more undo
+    steps, but correct results).
+- **Keyframes landed at 0.** `ComponentParam.createKeyframe()` takes only the
+  value; the time passed as a second argument was ignored. `effect_set_param`,
+  `effect_set_opacity`, `effect_set_transform` and `audio_add_volume_keyframe`
+  now set `Keyframe.position`, and `effect_set_param` also switches the param
+  to time-varying first.
+- `project_create_bin` created the bin but then failed with
+  `bin.getId is not a function`.
+- Errors the plugin raises for bad arguments (`INVALID_PARAMS`, `NOT_FOUND`)
+  are no longer reported as `PREMIERE_API_ERROR`.
 
 ### Added
 

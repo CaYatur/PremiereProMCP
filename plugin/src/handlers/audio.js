@@ -27,6 +27,7 @@ const {
   getComponentParams,
   setParamValue,
   tickTime,
+  createKeyframeAt,
   runTransaction,
 } = require("../ppro.js");
 
@@ -239,7 +240,7 @@ module.exports = {
           /* */
         }
       }
-      const keyframe = level.createKeyframe(linear, tickTime(params.atTicks));
+      const keyframe = createKeyframeAt(level, linear, params.atTicks);
       runTransaction(project, "PPMCP audio_add_volume_keyframe", (c) => {
         // Created inside lockedAccess (required since Premiere 26.3).
         const action = level.createAddKeyframeAction(keyframe);
@@ -284,7 +285,7 @@ module.exports = {
         throw new Error(`AudioFilterFactory.createComponentByDisplayName("${displayName}") returned null.`);
       }
       const { chain } = await getComponents(item);
-      runTransaction(project, "PPMCP audio_add_effect", (c) => {
+      await runTransaction(project, "PPMCP audio_add_effect", (c) => {
         // Created inside lockedAccess (required since Premiere 26.3).
         const action = chain.createAppendComponentAction(component);
         if (!action) throw new Error("createAppendComponentAction returned null/undefined.");

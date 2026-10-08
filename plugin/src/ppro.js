@@ -19,7 +19,9 @@ const TRACK_ITEM_TYPE_CLIP = 1;
 
 function apiError(context, err) {
   const e = new Error(`${context}: ${err && err.message ? err.message : String(err)}`);
-  e.code = "PREMIERE_API_ERROR";
+  // Keep a code we set ourselves (INVALID_PARAMS, NOT_FOUND, ...) so a
+  // rejected argument isn't reported as a Premiere failure.
+  e.code = err && typeof err.code === "string" && /^[A-Z_]+$/.test(err.code) ? err.code : "PREMIERE_API_ERROR";
   return e;
 }
 
@@ -383,6 +385,15 @@ function tickTime(ticksString) {
   return ppro.TickTime.createWithTicks(String(ticksString));
 }
 
+/** A keyframe holding `value` at `ticks`. ComponentParam.createKeyframe()
+ * takes only the value (a second time argument is silently ignored, which
+ * put every keyframe at 0); the time goes on Keyframe.position. */
+function createKeyframeAt(param, value, ticks) {
+  const keyframe = param.createKeyframe(value);
+  keyframe.position = tickTime(ticks);
+  return keyframe;
+}
+
 // --- Bins (issue #2) ----------------------------------------------------
 //
 // FolderItem.getItems() returns generic ProjectItem objects. A child bin
@@ -479,6 +490,7 @@ module.exports = {
   runTransaction,
   setParamValue,
   tickTime,
+  createKeyframeAt,
   findProjectItemById,
   asFolderItem,
   isBinItem,

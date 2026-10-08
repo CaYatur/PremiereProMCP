@@ -176,7 +176,10 @@ module.exports = {
         : await project.getRootItem();
     try {
       const bin = await createBinIn(project, parent, name);
-      return { name: bin.name, id: await bin.getId() };
+      // A FolderItem.cast() result has no getId() on 26.x; read the id from
+      // the plain ProjectItem the parent lists.
+      const listed = (await getBinChildren(parent)).find((c) => c.name === name && isBinItem(c));
+      return { name: bin.name || name, id: listed ? await listed.getId() : undefined };
     } catch (err) {
       throw apiError("project.createBin", err);
     }
