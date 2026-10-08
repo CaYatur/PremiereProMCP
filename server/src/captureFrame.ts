@@ -127,10 +127,32 @@ export function capturePremiereWindow(
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : String(e),
+      error: describeCaptureFailure(e),
       via: "printwindow",
     };
   }
+}
+
+/** Turn an execFileSync failure into a short, useful reason. Its default
+ * message starts with the whole PowerShell command line, which buried the
+ * real error (issue #2: users only saw the later export.frame timeout). */
+function describeCaptureFailure(e: unknown): string {
+  const ex = e as {
+    message?: string;
+    stderr?: string | Buffer;
+    stdout?: string | Buffer;
+    status?: number | null;
+    signal?: string | null;
+    code?: string;
+  };
+  if (process.platform !== "win32") return `window capture is Windows-only (platform ${process.platform})`;
+  if (ex?.code === "ENOENT") return "powershell.exe not found on PATH";
+  const detail = (String(ex?.stderr ?? "").trim() || String(ex?.stdout ?? "").trim() || String(ex?.message ?? e))
+    .replace(/\s+/g, " ")
+    .slice(0, 400);
+  if (ex?.signal) return `capture script killed (${ex.signal}, 60s timeout): ${detail}`;
+  if (typeof ex?.status === "number") return `capture script exited with code ${ex.status}: ${detail}`;
+  return detail;
 }
 
 /** Read PNG IHDR width/height without extra deps. */

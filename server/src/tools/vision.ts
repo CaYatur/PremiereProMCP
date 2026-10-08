@@ -381,9 +381,23 @@ async function captureFramePipeline(
   }
 
   await finish({ data: {} });
+  // Lead with the primary (window capture) failure: the 1-frame encode is
+  // only a last-resort fallback, and its "No response for method
+  // export.frame" timeout used to be the only thing users saw (issue #2).
+  const windowCaptureError =
+    attempts
+      .find((a) => a.startsWith("program-monitor:"))
+      ?.replace(/^program-monitor:\s*/, "") ?? "not attempted";
+  const fallbackErrors = attempts.filter((a) => a.startsWith("short-encode:")).map((a) => a.replace(/^short-encode:\s*/, ""));
+  const otherErrors = attempts.filter((a) => !a.startsWith("program-monitor:") && !a.startsWith("short-encode:"));
   return {
-    text: `Could not capture Program Monitor frame at ticks=${atTicks}. Attempts: ${attempts.join(" | ")}. Keep Premiere visible with Program panel open.`,
-    data: { atTicks, frame, outputPath, attempts, ok: false },
+    text:
+      `Could not capture a frame at ticks=${atTicks}. ` +
+      `Window capture (primary) failed: ${windowCaptureError}. ` +
+      (fallbackErrors.length ? `Fallback 1-frame encode also failed: ${fallbackErrors.join("; ")}. ` : "") +
+      (otherErrors.length ? `Other: ${otherErrors.join(" | ")}. ` : "") +
+      `Keep Premiere visible (not minimized) with the Program panel open.`,
+    data: { atTicks, frame, outputPath, windowCaptureError, fallbackErrors, attempts, ok: false },
   };
 }
 
