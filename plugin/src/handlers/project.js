@@ -1,4 +1,13 @@
-const { ppro, apiError, getActiveProject, findProjectItemById, runTransaction } = require("../ppro.js");
+const {
+  ppro,
+  apiError,
+  getActiveProject,
+  findProjectItemById,
+  runTransaction,
+  asFolderItem: asBin,
+  isBinItem,
+  getBinChildren,
+} = require("../ppro.js");
 
 async function projectSummary(project) {
   const sequences = await project.getSequences();
@@ -10,28 +19,50 @@ async function projectSummary(project) {
 }
 
 function asFolderItem(item) {
-  if (ppro.FolderItem && typeof ppro.FolderItem.cast === "function") {
-    try {
-      return ppro.FolderItem.cast(item);
-    } catch {
-      return item;
-    }
+  return asBin(item) || item;
+}
+
+/** Create bin `name` under `parent` and return it as a FolderItem. Uses
+ * project.createBin() if a build exposes it; otherwise the documented
+ * FolderItem.createBinAction inside a locked transaction. */
+async function createBinIn(project, parent, name) {
+  const folder = asFolderItem(parent);
+  if (typeof project.createBin === "function") {
+    return asFolderItem(await project.createBin(name, folder));
   }
-  return item;
+  await runTransaction(project, `PPMCP create bin ${name}`, (c) => {
+    c.addAction(folder.createBinAction(name, false));
+  });
+  const created = await findChildBin(folder, name);
+  if (!created) throw new Error(`Created bin "${name}" but could not find it afterwards.`);
+  return created;
+}
+
+async function findChildBin(folder, segment) {
+  const children = await getBinChildren(folder);
+  const match = children.find((c) => c.name === segment && isBinItem(c));
+  return match ? asBin(match) : null;
 }
 
 async function resolveOrCreateBin(project, binPath, createIfMissing = true) {
-  let current = await project.getRootItem();
+  let current = asBin(await project.getRootItem());
+  const walked = [];
   for (const segment of binPath) {
-    const children = await current.getItems();
-    let next = children.find((c) => c.name === segment);
+    walked.push(segment);
+    let next = await findChildBin(current, segment);
     if (!next) {
       if (!createIfMissing) {
-        const e = new Error(`Bin path segment "${segment}" not found.`);
+        const children = await getBinChildren(current);
+        const sameName = children.find((c) => c.name === segment);
+        const e = new Error(
+          sameName
+            ? `"${walked.join("/")}" exists but is not a bin.`
+            : `Bin path segment "${segment}" not found (looked in "${walked.slice(0, -1).join("/") || "<root>"}").`,
+        );
         e.code = "NOT_FOUND";
         throw e;
       }
-      next = await project.createBin(segment, current);
+      next = await createBinIn(project, current, segment);
     }
     current = next;
   }
@@ -39,14 +70,14 @@ async function resolveOrCreateBin(project, binPath, createIfMissing = true) {
 }
 
 async function listItems(bin, recursive) {
-  const children = await bin.getItems();
+  const children = await getBinChildren(bin);
   const result = [];
   for (const child of children) {
-    const isBin = typeof child.getItems === "function";
+    const isBin = isBinItem(child);
     const entry = {
       name: child.name,
       id: await child.getId(),
-      isBin: !!isBin,
+      isBin,
     };
     if (isBin && recursive) {
       entry.children = await listItems(child, true);
@@ -57,9 +88,9 @@ async function listItems(bin, recursive) {
 }
 
 async function walkItems(bin, path = [], visit) {
-  const children = await bin.getItems();
+  const children = await getBinChildren(bin);
   for (const child of children) {
-    const isBin = typeof child.getItems === "function";
+    const isBin = isBinItem(child);
     await visit(child, path, isBin);
     if (isBin) {
       await walkItems(child, [...path, child.name], visit);
@@ -142,7 +173,7 @@ module.exports = {
         ? await resolveOrCreateBin(project, parentBinPath)
         : await project.getRootItem();
     try {
-      const bin = await project.createBin(name, parent);
+      const bin = await createBinIn(project, parent, name);
       return { name: bin.name, id: await bin.getId() };
     } catch (err) {
       throw apiError("project.createBin", err);
@@ -192,14 +223,14 @@ module.exports = {
       let foundParent = null;
       await walkItems(await project.getRootItem(), [], async (child, path, isBin) => {
         if (isBin) {
-          const kids = await child.getItems();
+          const kids = await getBinChildren(child);
           for (const k of kids) {
             if ((await k.getId()) === projectItemId) foundParent = child;
           }
         }
       });
       // Also check root-level children
-      const rootKids = await (await project.getRootItem()).getItems();
+      const rootKids = await getBinChildren(await project.getRootItem());
       for (const k of rootKids) {
         if ((await k.getId()) === projectItemId) foundParent = await project.getRootItem();
       }

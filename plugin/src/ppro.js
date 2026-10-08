@@ -301,16 +301,65 @@ function tickTime(ticksString) {
   return ppro.TickTime.createWithTicks(String(ticksString));
 }
 
+// --- Bins (issue #2) ----------------------------------------------------
+//
+// FolderItem.getItems() returns generic ProjectItem objects. A child bin
+// does NOT expose getItems() until it is cast with ppro.FolderItem.cast()
+// (Adobe docs + community confirmation), so the old
+// `typeof child.getItems === "function"` test reported every nested bin as
+// a plain item and `bin.getItems is not a function` when walking into one.
+// Detect bins by ProjectItem.type === ProjectItem.TYPE_BIN (26.x types),
+// falling back to a cast attempt when `type` is unavailable.
+
+function binTypeConstant() {
+  try {
+    if (ppro.ProjectItem && typeof ppro.ProjectItem.TYPE_BIN === "number") return ppro.ProjectItem.TYPE_BIN;
+  } catch {
+    /* fall through */
+  }
+  return 2; // value reported by Adobe staff/community for bins
+}
+
+/** Return a FolderItem for `item` if it is a bin (or the root), else null. */
+function asFolderItem(item) {
+  if (!item) return null;
+  // Already a FolderItem (e.g. the root from getRootItem(), or a cast bin).
+  // Plain ProjectItems never expose getItems(), so this cannot misfire.
+  if (typeof item.getItems === "function") return item;
+  const type = item.type;
+  if (typeof type === "number" && type !== binTypeConstant()) return null;
+  try {
+    if (ppro.FolderItem && typeof ppro.FolderItem.cast === "function") {
+      const folder = ppro.FolderItem.cast(item);
+      if (folder && typeof folder.getItems === "function") return folder;
+    }
+  } catch {
+    /* not castable */
+  }
+  return null;
+}
+
+function isBinItem(item) {
+  return asFolderItem(item) !== null;
+}
+
+/** Children of a bin as ProjectItem[]; [] when `bin` is not a folder. */
+async function getBinChildren(bin) {
+  const folder = asFolderItem(bin);
+  if (!folder) return [];
+  return (await folder.getItems()) || [];
+}
+
 /** Shared by clip.js (clip_insert/overwrite) and media.js (proxy/multicam
  * tools, which operate on a ProjectItem directly rather than a track
  * clip). Confirmed (@adobe/premierepro type declarations): getId() is a
  * method, not a .nodeId property — live-confirmed wrong 2026-07-10. */
 async function findProjectItemById(project, projectItemId) {
   async function search(bin) {
-    const children = await bin.getItems();
+    const children = await getBinChildren(bin);
     for (const child of children) {
       if ((await child.getId()) === projectItemId) return child;
-      if (typeof child.getItems === "function") {
+      if (isBinItem(child)) {
         const found = await search(child).catch(() => undefined);
         if (found) return found;
       }
@@ -349,4 +398,7 @@ module.exports = {
   setParamValue,
   tickTime,
   findProjectItemById,
+  asFolderItem,
+  isBinItem,
+  getBinChildren,
 };

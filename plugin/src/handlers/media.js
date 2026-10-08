@@ -13,6 +13,8 @@ const {
   getActiveProject,
   findProjectItemById,
   runTransaction,
+  getBinChildren,
+  isBinItem,
 } = require("../ppro.js");
 
 async function asClipProjectItem(projectItem) {
@@ -209,9 +211,9 @@ async function walkMatchingMedia(project, matchString) {
   const q = String(matchString).toLowerCase();
   const matches = [];
   async function walk(bin) {
-    const children = await bin.getItems();
+    const children = await getBinChildren(bin);
     for (const child of children) {
-      if (typeof child.getItems === "function") {
+      if (isBinItem(child)) {
         await walk(child).catch(() => undefined);
         continue;
       }
