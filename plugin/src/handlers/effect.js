@@ -164,8 +164,11 @@ module.exports = {
         e.code = "NOT_FOUND";
         throw e;
       }
-      const action = chain.createRemoveComponentAction(comp);
-      runTransaction(project, "PPMCP effect_remove", (c) => c.addAction(action));
+      runTransaction(project, "PPMCP effect_remove", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = chain.createRemoveComponentAction(comp);
+        c.addAction(action);
+      });
       return { removed: true };
     } catch (err) {
       throw apiError("effect.remove", err);
@@ -214,8 +217,11 @@ module.exports = {
       try {
         const { tickTime } = require("../ppro.js");
         const keyframe = param.createKeyframe(value, tickTime(params.atTicks));
-        const action = param.createAddKeyframeAction(keyframe);
-        runTransaction(project, "PPMCP effect_set_param (keyframe)", (c) => c.addAction(action));
+        runTransaction(project, "PPMCP effect_set_param (keyframe)", (c) => {
+          // Created inside lockedAccess (required since Premiere 26.3).
+          const action = param.createAddKeyframeAction(keyframe);
+          c.addAction(action);
+        });
       } catch (err) {
         throw apiError("effect.setParam(keyframe)", err);
       }
@@ -322,8 +328,11 @@ module.exports = {
           /* optional */
         }
         const keyframe = param.createKeyframe(params.opacity, tickTime(params.atTicks));
-        const action = param.createAddKeyframeAction(keyframe);
-        runTransaction(project, "PPMCP effect_set_opacity keyframe", (c) => c.addAction(action));
+        runTransaction(project, "PPMCP effect_set_opacity keyframe", (c) => {
+          // Created inside lockedAccess (required since Premiere 26.3).
+          const action = param.createAddKeyframeAction(keyframe);
+          c.addAction(action);
+        });
         return { opacity: params.opacity, atTicks: String(params.atTicks), keyframed: true };
       } catch (err) {
         throw apiError("effect.setOpacity(keyframe)", err);
@@ -370,8 +379,11 @@ module.exports = {
         /* optional */
       }
       const keyframe = param.createKeyframe(value, tickTime(atTicks));
-      const action = param.createAddKeyframeAction(keyframe);
-      runTransaction(project, `PPMCP effect_set_transform ${label} kf`, (c) => c.addAction(action));
+      runTransaction(project, `PPMCP effect_set_transform ${label} kf`, (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = param.createAddKeyframeAction(keyframe);
+        c.addAction(action);
+      });
       return { keyframed: true, atTicks };
     }
     try {

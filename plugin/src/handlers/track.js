@@ -50,8 +50,11 @@ module.exports = {
       }
       const count = await getTrackCount(sequence, trackType);
       if (editor && typeof editor.createAddTrackAction === "function") {
-        const action = editor.createAddTrackAction(trackType, count);
-        await runTransaction(project, "PPMCP track_add", (c) => c.addAction(action));
+        await runTransaction(project, "PPMCP track_add", (c) => {
+          // Created inside lockedAccess (required since Premiere 26.3).
+          const action = editor.createAddTrackAction(trackType, count);
+          c.addAction(action);
+        });
         return { added: true, trackType, via: "createAddTrackAction", trackIndex: count };
       }
       if (typeof sequence.addTrack === "function") {
@@ -87,8 +90,11 @@ module.exports = {
       const { getEditor } = require("../ppro.js");
       const editor = await getEditor(sequence);
       if (typeof editor.createRemoveTrackAction === "function") {
-        const action = editor.createRemoveTrackAction(track);
-        await runTransaction(project, "PPMCP track_delete", (c) => c.addAction(action));
+        await runTransaction(project, "PPMCP track_delete", (c) => {
+          // Created inside lockedAccess (required since Premiere 26.3).
+          const action = editor.createRemoveTrackAction(track);
+          c.addAction(action);
+        });
         return { deleted: true, via: "createRemoveTrackAction" };
       }
       const e = new Error("No UXP method to delete a track on this Premiere build.");
@@ -143,11 +149,16 @@ module.exports = {
       // Prefer createSetNameAction (26.3+). Fall back to setName / writable .name
       // when the action factory is missing on this build.
       if (typeof track.createSetNameAction === "function") {
-        const action = track.createSetNameAction(name);
-        if (action) {
-          await runTransaction(project, "PPMCP track_rename", (c) => c.addAction(action));
-          return { name, via: "createSetNameAction" };
-        }
+        let created = false;
+        await runTransaction(project, "PPMCP track_rename", (c) => {
+          // Created inside lockedAccess (required since Premiere 26.3).
+          const action = track.createSetNameAction(name);
+          if (action) {
+            created = true;
+            c.addAction(action);
+          }
+        });
+        if (created) return { name, via: "createSetNameAction" };
       }
       if (typeof track.setName === "function") {
         await track.setName(name);

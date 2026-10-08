@@ -240,8 +240,11 @@ module.exports = {
         }
       }
       const keyframe = level.createKeyframe(linear, tickTime(params.atTicks));
-      const action = level.createAddKeyframeAction(keyframe);
-      runTransaction(project, "PPMCP audio_add_volume_keyframe", (c) => c.addAction(action));
+      runTransaction(project, "PPMCP audio_add_volume_keyframe", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = level.createAddKeyframeAction(keyframe);
+        c.addAction(action);
+      });
       return { set: true, decibels: db, linear };
     } catch (err) {
       throw apiError("audio.addVolumeKeyframe", err);
@@ -281,9 +284,12 @@ module.exports = {
         throw new Error(`AudioFilterFactory.createComponentByDisplayName("${displayName}") returned null.`);
       }
       const { chain } = await getComponents(item);
-      const action = chain.createAppendComponentAction(component);
-      if (!action) throw new Error("createAppendComponentAction returned null/undefined.");
-      runTransaction(project, "PPMCP audio_add_effect", (c) => c.addAction(action));
+      runTransaction(project, "PPMCP audio_add_effect", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = chain.createAppendComponentAction(component);
+        if (!action) throw new Error("createAppendComponentAction returned null/undefined.");
+        c.addAction(action);
+      });
       return { added: true, displayName };
     } catch (err) {
       throw apiError("audio.addEffect", err);

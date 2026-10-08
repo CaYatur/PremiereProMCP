@@ -170,8 +170,11 @@ module.exports = {
       if (typeof folder.createMoveItemAction !== "function") {
         throw new Error("FolderItem.createMoveItemAction not available.");
       }
-      const action = folder.createMoveItemAction(item, folder);
-      await runTransaction(project, "PPMCP project_move_item", (c) => c.addAction(action));
+      await runTransaction(project, "PPMCP project_move_item", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = folder.createMoveItemAction(item, folder);
+        c.addAction(action);
+      });
       return { moved: true, projectItemId, destBinPath: destBinPath || [] };
     } catch (err) {
       throw apiError("project.moveItem", err);
@@ -204,8 +207,11 @@ module.exports = {
       if (typeof parent.createRemoveItemAction !== "function") {
         throw new Error("FolderItem.createRemoveItemAction not available.");
       }
-      const action = parent.createRemoveItemAction(item);
-      await runTransaction(project, "PPMCP project_delete_item", (c) => c.addAction(action));
+      await runTransaction(project, "PPMCP project_delete_item", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = parent.createRemoveItemAction(item);
+        c.addAction(action);
+      });
       return { deleted: true, projectItemId };
     } catch (err) {
       throw apiError("project.deleteItem", err);

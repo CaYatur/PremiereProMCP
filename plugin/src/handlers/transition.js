@@ -73,11 +73,14 @@ module.exports = {
         forceSingleSided,
         alignment,
       });
-      const action = opts
-        ? item.createAddVideoTransitionAction(videoTransition, opts)
-        : item.createAddVideoTransitionAction(videoTransition);
-      if (!action) throw new Error("createAddVideoTransitionAction returned null/undefined.");
-      await runTransaction(project, "PPMCP transition_apply", (c) => c.addAction(action));
+      await runTransaction(project, "PPMCP transition_apply", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = opts
+          ? item.createAddVideoTransitionAction(videoTransition, opts)
+          : item.createAddVideoTransitionAction(videoTransition);
+        if (!action) throw new Error("createAddVideoTransitionAction returned null/undefined.");
+        c.addAction(action);
+      });
       return { applied: true, matchName, edge: edge || "tail" };
     } catch (err) {
       throw apiError("transition.apply", err);
@@ -92,9 +95,12 @@ module.exports = {
       if (typeof item.createRemoveVideoTransitionAction !== "function") {
         throw new Error("TrackItem has no createRemoveVideoTransitionAction.");
       }
-      const action = item.createRemoveVideoTransitionAction(transitionPosition(edge || "tail"));
-      if (!action) throw new Error("createRemoveVideoTransitionAction returned null/undefined.");
-      await runTransaction(project, "PPMCP transition_remove", (c) => c.addAction(action));
+      await runTransaction(project, "PPMCP transition_remove", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = item.createRemoveVideoTransitionAction(transitionPosition(edge || "tail"));
+        if (!action) throw new Error("createRemoveVideoTransitionAction returned null/undefined.");
+        c.addAction(action);
+      });
       return { removed: true, edge: edge || "tail" };
     } catch (err) {
       throw apiError("transition.remove", err);

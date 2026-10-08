@@ -91,9 +91,12 @@ module.exports = {
     const item = await findProjectItemById(project, projectItemId);
     try {
       const clip = await asClipProjectItem(item);
-      const action = clip.createSetOfflineAction();
-      if (!action) throw new Error("createSetOfflineAction returned null/undefined.");
-      await runTransaction(project, "PPMCP media_set_offline", (c) => c.addAction(action));
+      await runTransaction(project, "PPMCP media_set_offline", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = clip.createSetOfflineAction();
+        if (!action) throw new Error("createSetOfflineAction returned null/undefined.");
+        c.addAction(action);
+      });
       return { offline: true };
     } catch (err) {
       throw apiError("media.setOffline", err);
@@ -129,9 +132,12 @@ module.exports = {
     const item = await findProjectItemById(project, projectItemId);
     try {
       const clip = await asClipProjectItem(item);
-      const action = clip.createSetNameAction(name);
-      if (!action) throw new Error("createSetNameAction returned null/undefined.");
-      await runTransaction(project, "PPMCP media_rename", (c) => c.addAction(action));
+      await runTransaction(project, "PPMCP media_rename", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = clip.createSetNameAction(name);
+        if (!action) throw new Error("createSetNameAction returned null/undefined.");
+        c.addAction(action);
+      });
       return { renamed: true, name };
     } catch (err) {
       throw apiError("media.rename", err);

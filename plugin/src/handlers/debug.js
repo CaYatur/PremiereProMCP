@@ -124,8 +124,11 @@ module.exports = {
       ]) {
         try {
           const kf = textParam.createKeyframe(value);
-          const action = textParam.createSetValueAction(kf);
-          await runTransaction(project, "PPMCP debug text write", (c) => c.addAction(action));
+          await runTransaction(project, "PPMCP debug text write", (c) => {
+            // Created inside lockedAccess (required since Premiere 26.3).
+            const action = textParam.createSetValueAction(kf);
+            c.addAction(action);
+          });
           result.writeAttempt = { value, ok: true };
           break;
         } catch (e) {
@@ -183,18 +186,24 @@ module.exports = {
 
     // 1) raw ProjectItem
     attempts.push(await safe(async () => {
-      const action = editor.createOverwriteItemAction(item, t, ti, 0);
-      if (!action) throw new Error("action null");
-      await runTransaction(project, "PPMCP debug overwrite raw", (c) => c.addAction(action));
+      await runTransaction(project, "PPMCP debug overwrite raw", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = editor.createOverwriteItemAction(item, t, ti, 0);
+        if (!action) throw new Error("action null");
+        c.addAction(action);
+      });
       return "overwrite raw ProjectItem";
     }));
 
     // 2) ClipProjectItem cast
     attempts.push(await safe(async () => {
       const clip = ppro.ClipProjectItem.cast(item);
-      const action = editor.createOverwriteItemAction(clip, t, ti, 0);
-      if (!action) throw new Error("action null");
-      await runTransaction(project, "PPMCP debug overwrite cast", (c) => c.addAction(action));
+      await runTransaction(project, "PPMCP debug overwrite cast", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = editor.createOverwriteItemAction(clip, t, ti, 0);
+        if (!action) throw new Error("action null");
+        c.addAction(action);
+      });
       return "overwrite ClipProjectItem.cast";
     }));
 
@@ -202,13 +211,17 @@ module.exports = {
     for (const limit of [false, true]) {
       attempts.push(await safe(async () => {
         const clip = ppro.ClipProjectItem.cast(item);
-        const action = editor.createInsertProjectItemAction(clip, t, ti, 0, limit);
-        if (!action) throw new Error("action null");
         // Check addAction return before executeTransaction throw
         let addOk;
-        const execResult = await project.executeTransaction((c) => {
-          addOk = c.addAction(action);
-        }, `PPMCP debug insert limit=${limit}`);
+        let execResult;
+        project.lockedAccess(() => {
+          execResult = project.executeTransaction((c) => {
+            const action = editor.createInsertProjectItemAction(clip, t, ti, 0, limit);
+            if (!action) throw new Error("action null");
+            addOk = c.addAction(action);
+          }, `PPMCP debug insert limit=${limit}`);
+        });
+        execResult = await execResult;
         return { via: `insert cast limit=${limit}`, addOk, execResult };
       }));
     }
@@ -216,10 +229,10 @@ module.exports = {
     // 4) lockedAccess wrap
     attempts.push(await safe(async () => {
       const clip = ppro.ClipProjectItem.cast(item);
-      const action = editor.createOverwriteItemAction(clip, t, ti, 1);
       if (typeof project.lockedAccess === "function") {
         let inner;
         project.lockedAccess(() => {
+          const action = editor.createOverwriteItemAction(clip, t, ti, 1);
           inner = project.executeTransaction((c) => c.addAction(action), "PPMCP debug locked overwrite");
         });
         return { via: "lockedAccess+overwrite track1", inner: await inner };
@@ -250,19 +263,24 @@ module.exports = {
         continue;
       }
       attempts.push(await safe(async () => {
-        const action = markers.createAddMarkerAction(
-          "PPMCP probe",
-          type,
-          tickTime(atTicks || "0"),
-          ppro.TickTime.TIME_ZERO,
-          "probe",
-        );
-        if (!action) throw new Error("action null");
         let addOk;
         try {
-          await project.executeTransaction((c) => {
-            addOk = c.addAction(action);
-          }, `PPMCP debug marker ${label}`);
+          let exec;
+          project.lockedAccess(() => {
+            exec = project.executeTransaction((c) => {
+              // Created inside lockedAccess (required since Premiere 26.3).
+              const action = markers.createAddMarkerAction(
+                "PPMCP probe",
+                type,
+                tickTime(atTicks || "0"),
+                ppro.TickTime.TIME_ZERO,
+                "probe",
+              );
+              if (!action) throw new Error("action null");
+              addOk = c.addAction(action);
+            }, `PPMCP debug marker ${label}`);
+          });
+          await exec;
         } catch (e) {
           throw new Error(`addAction/exec: ${e.message}; addOk=${addOk}`);
         }
@@ -396,8 +414,11 @@ module.exports = {
               kfValType: kf && kf.value !== undefined ? typeof kf.value : null,
             });
             try {
-              const action = p.createSetValueAction(kf, true);
-              await runTransaction(project, `PPMCP st probe ${i} ${label}`, (c) => c.addAction(action));
+              await runTransaction(project, `PPMCP st probe ${i} ${label}`, (c) => {
+                // Created inside lockedAccess (required since Premiere 26.3).
+                const action = p.createSetValueAction(kf, true);
+                c.addAction(action);
+              });
               entry.writes[entry.writes.length - 1].setValue = "ok";
               entry.success = label;
               break;
@@ -413,8 +434,11 @@ module.exports = {
       if (/size|opacity|justif/i.test(name)) {
         try {
           const kf = p.createKeyframe(/size/i.test(name) ? 72 : /opacity/i.test(name) ? 100 : 1);
-          const action = p.createSetValueAction(kf, true);
-          await runTransaction(project, `PPMCP st num ${i}`, (c) => c.addAction(action));
+          await runTransaction(project, `PPMCP st num ${i}`, (c) => {
+            // Created inside lockedAccess (required since Premiere 26.3).
+            const action = p.createSetValueAction(kf, true);
+            c.addAction(action);
+          });
           entry.numberWrite = "ok";
         } catch (e) {
           entry.numberWrite = String(e && e.message ? e.message : e);

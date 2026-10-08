@@ -297,8 +297,11 @@ module.exports = {
         return { moved: true, newStartTicks, via: "setStart/setEnd" };
       }
       const delta = newStart - start;
-      const action = item.createMoveAction(tickTime(String(delta)));
-      await runTransaction(project, "PPMCP clip_move", (c) => c.addAction(action));
+      await runTransaction(project, "PPMCP clip_move", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = item.createMoveAction(tickTime(String(delta)));
+        c.addAction(action);
+      });
       return { moved: true, newStartTicks, via: "createMoveAction delta" };
     } catch (err) {
       throw apiError("clip.move", err);
@@ -330,8 +333,11 @@ module.exports = {
       // Clone with zero vertical offset, time offset = cut - start, isInsert=false (overwrite-style).
       // Signature: (trackItem, timeOffset, videoTrackVerticalOffset, audioTrackVerticalOffset, alignToVideo, isInsert)
       const timeOffset = tickTime(String(cut - start));
-      const cloneAction = editor.createCloneTrackItemAction(item, timeOffset, 0, 0, true, true);
-      await runTransaction(project, "PPMCP clip_split clone", (c) => c.addAction(cloneAction));
+      await runTransaction(project, "PPMCP clip_split clone", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const cloneAction = editor.createCloneTrackItemAction(item, timeOffset, 0, 0, true, true);
+        c.addAction(cloneAction);
+      });
       // Re-fetch original (indices may shift) and trim its end to cut.
       const { items } = await getClip(sequence, trackType, trackIndex, clipIndex);
       const original = items[clipIndex];
@@ -407,11 +413,10 @@ module.exports = {
       const delta = BigInt(deltaTicks);
       const earlierEnd = (await earlier.getEndTime()).ticks;
       const newCut = (BigInt(earlierEnd) + delta).toString();
-      const actionA = earlier.createSetEndAction(tickTime(newCut));
-      const actionB = later.createSetStartAction(tickTime(newCut));
       await runTransaction(project, "PPMCP clip_roll", (c) => {
-        c.addAction(actionA);
-        c.addAction(actionB);
+        // Actions must be created inside lockedAccess (required since Premiere 26.3).
+        c.addAction(earlier.createSetEndAction(tickTime(newCut)));
+        c.addAction(later.createSetStartAction(tickTime(newCut)));
       });
       return { rolled: true, newCutTicks: newCut };
     } catch (err) {
@@ -425,17 +430,34 @@ module.exports = {
     const { item } = await getClip(sequence, trackType, trackIndex, clipIndex);
     try {
       const delta = BigInt(deltaTicks);
-      const inTicks = (await item.getInPoint()).ticks;
-      const outTicks = (await item.getOutPoint()).ticks;
-      const newIn = (BigInt(inTicks) + delta).toString();
-      const newOut = (BigInt(outTicks) + delta).toString();
-      const actionA = item.createSetInPointAction(tickTime(newIn));
-      const actionB = item.createSetOutPointAction(tickTime(newOut));
+      const inTicks = BigInt((await item.getInPoint()).ticks);
+      const outTicks = BigInt((await item.getOutPoint()).ticks);
+      const newIn = inTicks + delta;
+      const newOut = outTicks + delta;
+      if (delta === 0n) return { slipped: false, reason: "deltaTicks is 0", inPointTicks: String(inTicks), outPointTicks: String(outTicks) };
+      if (newIn < 0n) {
+        const e = new Error(
+          `Slip by ${delta} ticks would move the source in-point before the start of the media (current in-point ${inTicks}). Use a smaller backward delta.`,
+        );
+        e.code = "INVALID_PARAMS";
+        throw e;
+      }
       await runTransaction(project, "PPMCP clip_slip", (c) => {
-        c.addAction(actionA);
-        c.addAction(actionB);
+        // Actions must be created inside lockedAccess (required since
+        // Premiere 26.3 — otherwise "Requires locked access", issue #2).
+        const setIn = item.createSetInPointAction(tickTime(String(newIn)));
+        const setOut = item.createSetOutPointAction(tickTime(String(newOut)));
+        // Keep in < out at every intermediate step: when slipping forward,
+        // move the out-point first; when slipping backward, the in-point.
+        if (delta > 0n) {
+          c.addAction(setOut);
+          c.addAction(setIn);
+        } else {
+          c.addAction(setIn);
+          c.addAction(setOut);
+        }
       });
-      return { slipped: true };
+      return { slipped: true, inPointTicks: String(newIn), outPointTicks: String(newOut) };
     } catch (err) {
       throw apiError("clip.slip", err);
     }
@@ -459,13 +481,11 @@ module.exports = {
       const itemNewEnd = (BigInt((await item.getEndTime()).ticks) + delta).toString();
       // Confirmed signature: TrackItem#createMoveAction(tickTime) — on the
       // item itself, not SequenceEditor (this file's original wrong guess).
-      const moveAction = item.createMoveAction(tickTime(itemNewStart));
-      const prevTrimAction = prev.createSetEndAction(tickTime(itemNewStart));
-      const nextTrimAction = next.createSetStartAction(tickTime(itemNewEnd));
       await runTransaction(project, "PPMCP clip_slide", (c) => {
-        c.addAction(prevTrimAction);
-        c.addAction(moveAction);
-        c.addAction(nextTrimAction);
+        // Actions must be created inside lockedAccess (required since Premiere 26.3).
+        c.addAction(prev.createSetEndAction(tickTime(itemNewStart)));
+        c.addAction(item.createMoveAction(tickTime(itemNewStart)));
+        c.addAction(next.createSetStartAction(tickTime(itemNewEnd)));
       });
       return { slid: true };
     } catch (err) {
@@ -483,8 +503,11 @@ module.exports = {
       // Confirmed enum (@adobe/premierepro): ppro.Constants.MediaType —
       // {ANY, DATA, VIDEO, AUDIO} — not the raw 1/2 this file guessed first.
       const mediaType = trackType === "audio" ? ppro.Constants.MediaType.AUDIO : ppro.Constants.MediaType.VIDEO;
-      const action = editor.createRemoveItemsAction(selection, true, mediaType);
-      await runTransaction(project, "PPMCP clip_ripple_delete", (c) => c.addAction(action));
+      await runTransaction(project, "PPMCP clip_ripple_delete", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = editor.createRemoveItemsAction(selection, true, mediaType);
+        c.addAction(action);
+      });
       return { deleted: true, rippled: true };
     } catch (err) {
       throw apiError("clip.rippleDelete", err);
@@ -499,8 +522,11 @@ module.exports = {
       const editor = await getEditor(sequence);
       const selection = await buildSingleItemSelection(sequence, item);
       const mediaType = trackType === "audio" ? ppro.Constants.MediaType.AUDIO : ppro.Constants.MediaType.VIDEO;
-      const action = editor.createRemoveItemsAction(selection, false, mediaType);
-      await runTransaction(project, "PPMCP clip_lift", (c) => c.addAction(action));
+      await runTransaction(project, "PPMCP clip_lift", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = editor.createRemoveItemsAction(selection, false, mediaType);
+        c.addAction(action);
+      });
       return { deleted: true, rippled: false };
     } catch (err) {
       throw apiError("clip.lift", err);
@@ -515,11 +541,11 @@ module.exports = {
       // Live: createSetSpeedAction is NOT a function on VideoClipTrackItem in
       // this build. Try alternate names; fail loud with guidance if none work.
       const rate = speedPercent / 100;
-      let action;
+      let factory;
       if (typeof item.createSetSpeedAction === "function") {
-        action = item.createSetSpeedAction(rate, !!reverse, !!maintainPitch, !!rippleEdit);
+        factory = "createSetSpeedAction";
       } else if (typeof item.createSetPlaybackSpeedAction === "function") {
-        action = item.createSetPlaybackSpeedAction(rate, !!reverse, !!maintainPitch, !!rippleEdit);
+        factory = "createSetPlaybackSpeedAction";
       } else if (typeof item.setSpeed === "function") {
         await item.setSpeed(rate, !!reverse, !!maintainPitch, !!rippleEdit);
         return { speedPercent, reverse: !!reverse, via: "setSpeed" };
@@ -530,7 +556,14 @@ module.exports = {
         e.code = "PREMIERE_API_ERROR";
         throw e;
       }
-      await runTransaction(project, "PPMCP clip_set_speed", (c) => c.addAction(action));
+      await runTransaction(project, "PPMCP clip_set_speed", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action =
+          factory === "createSetSpeedAction"
+            ? item.createSetSpeedAction(rate, !!reverse, !!maintainPitch, !!rippleEdit)
+            : item.createSetPlaybackSpeedAction(rate, !!reverse, !!maintainPitch, !!rippleEdit);
+        c.addAction(action);
+      });
       return { speedPercent, reverse: !!reverse };
     } catch (err) {
       throw apiError("clip.setSpeed", err);
@@ -546,8 +579,11 @@ module.exports = {
         throw new Error("createSetDisabledAction is not available on this track item.");
       }
       // API takes "disabled" — invert enabled.
-      const action = item.createSetDisabledAction(!enabled);
-      await runTransaction(project, "PPMCP clip_set_enabled", (c) => c.addAction(action));
+      await runTransaction(project, "PPMCP clip_set_enabled", (c) => {
+        // Created inside lockedAccess (required since Premiere 26.3).
+        const action = item.createSetDisabledAction(!enabled);
+        c.addAction(action);
+      });
       return { enabled: !!enabled };
     } catch (err) {
       throw apiError("clip.setEnabled", err);
@@ -564,11 +600,13 @@ module.exports = {
       // (same class of failure as marker_add). Try action first, then direct.
       if (typeof item.createSetNameAction === "function") {
         try {
-          const action = item.createSetNameAction(name);
-          if (action) {
-            await runTransaction(project, "PPMCP clip_rename", (c) => c.addAction(action));
-            return { name, via: "createSetNameAction" };
-          }
+          await runTransaction(project, "PPMCP clip_rename", (c) => {
+            // Created inside lockedAccess (required since Premiere 26.3).
+            const action = item.createSetNameAction(name);
+            if (!action) throw new Error("createSetNameAction returned null");
+            c.addAction(action);
+          });
+          return { name, via: "createSetNameAction" };
         } catch {
           /* try fallbacks */
         }

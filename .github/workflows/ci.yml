@@ -43,6 +43,11 @@ jobs:
 
       # No Premiere Pro here, so nothing that touches the relay can run.
       # These are the checks that are meaningful without a live host.
+      # Premiere 26.3+ throws "Requires locked access" for any create*Action()
+      # made outside project.lockedAccess (issue #2). Static check, no host.
+      - name: UXP action lock-scope check
+        run: node scripts/check-action-lock-scope.mjs
+
       - name: Tool profile check
         run: node scripts/check-profiles.mjs
 
