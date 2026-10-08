@@ -7,6 +7,8 @@ const {
   asFolderItem: asBin,
   isBinItem,
   getBinChildren,
+  sequenceIdOf,
+  getTrackItems,
 } = require("../ppro.js");
 
 async function projectSummary(project) {
@@ -267,6 +269,92 @@ module.exports = {
       return matches.filter((m) => m.path.length === 0);
     }
     return matches;
+  },
+
+  /** One-call unused-media scan (issue #2). The old server-side version
+   * made several relay round-trips per sequence/track (each throttled) and
+   * timed out on a 107-item project; it also compared by display name and
+   * counted bins as media. This walks every sequence's clip track items in
+   * the plugin, collects their source projectItem ids, and compares by id
+   * (name match only for track items whose project item can't be resolved). */
+  "project.findUnusedMedia": async ({ includeSequences } = {}) => {
+    const project = await getActiveProject();
+
+    // 1) Every non-bin project item, with its bin path.
+    const media = [];
+    await walkItems(await project.getRootItem(), [], async (child, path, isBin) => {
+      if (isBin) return;
+      let id;
+      try {
+        id = await child.getId();
+      } catch {
+        return;
+      }
+      let isSequence = false;
+      try {
+        if (ppro.ClipProjectItem && typeof ppro.ClipProjectItem.cast === "function") {
+          const clip = ppro.ClipProjectItem.cast(child);
+          if (clip && typeof clip.isSequence === "function") isSequence = !!(await clip.isSequence());
+        }
+      } catch {
+        /* not a clip project item */
+      }
+      media.push({ id, name: child.name, path, isSequence });
+    });
+
+    // 2) Source project item of every clip on every track of every sequence.
+    const usedIds = new Set();
+    const unresolvedNames = new Set();
+    const sequences = (await project.getSequences()) || [];
+    let trackItemCount = 0;
+    const sequenceErrors = [];
+    for (const sequence of sequences) {
+      try {
+        for (const kind of ["video", "audio"]) {
+          const count = kind === "audio" ? await sequence.getAudioTrackCount() : await sequence.getVideoTrackCount();
+          for (let t = 0; t < count; t++) {
+            const track = kind === "audio" ? await sequence.getAudioTrack(t) : await sequence.getVideoTrack(t);
+            if (!track) continue;
+            const items = (await getTrackItems(track)) || [];
+            for (const ti of items) {
+              trackItemCount++;
+              try {
+                const pi = await ti.getProjectItem();
+                const pid = pi && typeof pi.getId === "function" ? await pi.getId() : undefined;
+                if (pid) {
+                  usedIds.add(pid);
+                  continue;
+                }
+              } catch {
+                /* fall through to name */
+              }
+              try {
+                const n = await ti.getName();
+                if (n) unresolvedNames.add(n);
+              } catch {
+                /* ignore */
+              }
+            }
+          }
+        }
+      } catch (err) {
+        sequenceErrors.push(`${sequence.name || sequenceIdOf(sequence)}: ${err && err.message ? err.message : err}`);
+      }
+    }
+
+    const candidates = includeSequences ? media : media.filter((m) => !m.isSequence);
+    const unused = candidates.filter((m) => !usedIds.has(m.id) && !unresolvedNames.has(m.name));
+    return {
+      unused: unused.map(({ id, name, path, isSequence }) => ({ id, name, path, isSequence: isSequence || undefined })),
+      unusedCount: unused.length,
+      mediaItemCount: candidates.length,
+      sequenceCount: sequences.length,
+      trackItemCount,
+      usedItemCount: usedIds.size,
+      nameMatchedTrackItems: unresolvedNames.size,
+      sequenceErrors: sequenceErrors.length ? sequenceErrors : undefined,
+      method: "projectItemId",
+    };
   },
 
   "project.findOffline": async () => {
