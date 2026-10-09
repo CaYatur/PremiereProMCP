@@ -6,6 +6,8 @@ All notable changes to PPMCP are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-10-09
+
 ### Added
 
 - **Relative Lumetri adjustments (#4).** `color_adjust` adds a delta to each
@@ -306,6 +308,7 @@ pass, export, and screenshots. Atomic multi-step edits via
 `Project.executeTransaction()`, rate limiting, and file checkpoints.
 Pure-PowerShell Windows Setup with bundled portable Node.
 
+[1.2.0]: https://github.com/CaYatur/PremiereProMCP/releases/tag/v1.2.0
 [1.1.1]: https://github.com/CaYatur/PremiereProMCP/releases/tag/v1.1.1
 [1.1.0]: https://github.com/CaYatur/PremiereProMCP/releases/tag/v1.1.0
 [1.0.2]: https://github.com/CaYatur/PremiereProMCP/releases/tag/v1.0.2
