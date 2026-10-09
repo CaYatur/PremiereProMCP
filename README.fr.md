@@ -97,7 +97,7 @@ claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\no
 
 **Tout autre client MCP** — Cline, Roo Code, Continue, Zed, LM Studio, JetBrains AI, Gemini CLI, Codex CLI… donnez-lui le transport **`stdio`** (parfois appele "local", "command" ou "process"), le chemin de Node comme commande et le chemin du serveur comme unique argument. Presque tous utilisent la forme `mcpServers` ci-dessus. Un client qui ne propose qu'un champ URL distante ne peut pas lancer PPMCP.
 
-**`PPMCP_PROFILE`** — `core` (19) · `standard` (109, par defaut) · `full` (277). Cela ne fixe que le point de *depart* : le modele peut elargir lui-meme sa surface avec `tool_profile({ profile: "full" })` ou `{ category: "color" }`, et `tool_invoke` execute n'importe quel outil, enregistre ou non.
+**`PPMCP_PROFILE`** — `core` (19) · `standard` (112, par defaut) · `full` (280). Cela ne fixe que le point de *depart* : le modele peut elargir lui-meme sa surface avec `tool_profile({ profile: "full" })` ou `{ category: "color" }`, et `tool_invoke` execute n'importe quel outil, enregistre ou non.
 
 ```json
 "env": { "PPMCP_PROFILE": "standard" }
@@ -109,6 +109,6 @@ claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\no
 
 ## Etat des outils
 
-277 outils MCP dans ~20 categories. `clip_append` est maintenant confirme fonctionnel et `sequence_set_in_out` fonctionne maintenant (confirme en direct ; appelle `sequence.createSetInPointAction`, Premiere 25.6+). Limite confirmee de la plateforme Adobe : l'API UXP n'a aucune methode pour ajouter des pistes vides (`track_add`) — planifiez le nombre de pistes a la creation de la sequence. Tableau detaille et a jour dans le **[README anglais](./README.md#tool-status-whats-actually-tested)** ou [docs/FEATURES.md](./docs/FEATURES.md).
+280 outils MCP dans ~20 categories. `clip_append` est maintenant confirme fonctionnel et `sequence_set_in_out` fonctionne maintenant (confirme en direct ; appelle `sequence.createSetInPointAction`, Premiere 25.6+). Limite confirmee de la plateforme Adobe : l'API UXP n'a aucune methode pour ajouter des pistes vides (`track_add`) — planifiez le nombre de pistes a la creation de la sequence. Tableau detaille et a jour dans le **[README anglais](./README.md#tool-status-whats-actually-tested)** ou [docs/FEATURES.md](./docs/FEATURES.md).
 
 Details : **[INSTALL.md](./INSTALL.md)** · fonctions dans le README anglais.

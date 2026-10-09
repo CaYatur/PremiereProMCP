@@ -440,7 +440,7 @@ export const agentOrchestrationTools = [
     name: "edit_quality_pass",
     title: "Delivery quality pass (batchable for large projects)",
     description:
-      "Lumetri + capped dissolves + edge fades on a WINDOW of V clips. Default maxGrade=24 per call. LARGE projects: loop with clipFrom=nextClipFrom until hasMore=false. Never grades 200 clips in one shot (Premiere crash). Hard cuts only: maxTransitions:0. No fade-in/out on the first/last clip: fadeEdges:false. WARNING: grading writes ABSOLUTE Lumetri values (Contrast/Shadows/Highlights/Saturation/Temperature/Tint per look) and overwrites any existing per-clip Lumetri correction — read values with effect_list_applied first if clips are already graded.",
+      "Lumetri + capped dissolves + edge fades on a WINDOW of V clips. Default maxGrade=24 per call. LARGE projects: loop with clipFrom=nextClipFrom until hasMore=false. Never grades 200 clips in one shot (Premiere crash). Hard cuts only: maxTransitions:0. No fade-in/out on the first/last clip: fadeEdges:false. WARNING: grading writes ABSOLUTE Lumetri values (Contrast/Shadows/Highlights/Saturation/Temperature/Tint per look) and overwrites any existing per-clip Lumetri correction — pass gradeMode: relative to keep existing corrections and nudge them instead.",
     inputSchema: {
       trackIndex: z.number().int().optional().default(0),
       look: z.enum(["neutral", "warm", "cool"]).optional().default("neutral"),
@@ -461,6 +461,13 @@ export const agentOrchestrationTools = [
         .optional()
         .default(true)
         .describe("Fade in the first clip of the sequence (clipFrom 0) and fade out the last one. false = no fades."),
+      gradeMode: z
+        .enum(["absolute", "relative"])
+        .optional()
+        .default("absolute")
+        .describe(
+          "absolute = write the look's Lumetri values (overwrites per-clip corrections). relative = add the look's offset from Lumetri defaults to each clip's current values, keeping existing corrections. relative stacks: running it twice on the same clips applies the look twice.",
+        ),
       clipFrom: z
         .number()
         .int()
@@ -477,6 +484,7 @@ export const agentOrchestrationTools = [
         maxGrade: p.maxGrade ?? 24,
         maxTransitions: p.maxTransitions ?? 16,
         fadeEdges: p.fadeEdges ?? true,
+        gradeMode: p.gradeMode ?? "absolute",
         clipFrom: p.clipFrom ?? 0,
         throttleMs: 60,
       });

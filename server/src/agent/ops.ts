@@ -105,13 +105,21 @@ function pickSequenceByQuery(
   return top[top.length - 1] || matches[matches.length - 1] || null;
 }
 
-/** Quality grade for one video clip (Lumetri + tasteful defaults). */
+type GradeMode = "absolute" | "relative";
+
+const gradeModeOf = (step: EditOp): GradeMode => (step.gradeMode === "relative" ? "relative" : "absolute");
+
+/** Quality grade for one video clip (Lumetri + tasteful defaults).
+ * "absolute" writes the look's values; "relative" adds the look's offset
+ * from Lumetri's defaults to whatever the clip already has (issue #4), so
+ * existing per-clip corrections survive. */
 async function gradeClip(
   ctx: ToolContext,
   sequenceId: string | undefined,
   trackIndex: number,
   clipIndex: number,
   look: "neutral" | "warm" | "cool" = "neutral",
+  mode: GradeMode = "absolute",
 ): Promise<void> {
   await ctx.relay.call("color.applyLumetri", {
     sequenceId,
@@ -124,7 +132,18 @@ async function gradeClip(
     warm: { Contrast: 12, Shadows: -8, Saturation: 95, Temperature: 12, Tint: 3 },
     cool: { Contrast: 12, Shadows: -8, Saturation: 85, Temperature: -10, Tint: -3 },
   };
-  for (const [paramName, value] of Object.entries(looks[look] || looks.neutral!)) {
+  const values = looks[look] || looks.neutral!;
+  if (mode === "relative") {
+    // Lumetri defaults: Saturation 100, everything else 0.
+    const deltas: Record<string, number> = {};
+    for (const [paramName, value] of Object.entries(values)) {
+      const delta = value - (paramName === "Saturation" ? 100 : 0);
+      if (delta !== 0) deltas[paramName] = delta;
+    }
+    await ctx.relay.call("color.adjust", { sequenceId, trackType: "video", trackIndex, clipIndex, deltas });
+    return;
+  }
+  for (const [paramName, value] of Object.entries(values)) {
     try {
       await ctx.relay.call("color.setParam", {
         sequenceId,
@@ -646,7 +665,7 @@ async function runOpInner(ctx: ToolContext, step: EditOp): Promise<OpResult> {
       const trackIndex = Number(step.trackIndex ?? 0);
       const clipIndex = Number(step.clipIndex ?? 0);
       const look = (step.look as "neutral" | "warm" | "cool") || "neutral";
-      await gradeClip(ctx, sequenceId, trackIndex, clipIndex, look);
+      await gradeClip(ctx, sequenceId, trackIndex, clipIndex, look, gradeModeOf(step));
       return { op, ok: true, data: { graded: true, trackIndex, clipIndex, look } };
     }
 
@@ -663,7 +682,7 @@ async function runOpInner(ctx: ToolContext, step: EditOp): Promise<OpResult> {
       const results = [];
       for (const c of clips.slice(0, maxGrade)) {
         try {
-          await gradeClip(ctx, sequenceId, trackIndex, c.clipIndex, look);
+          await gradeClip(ctx, sequenceId, trackIndex, c.clipIndex, look, gradeModeOf(step));
           results.push({ clipIndex: c.clipIndex, ok: true });
           await new Promise((r) => setTimeout(r, 80));
         } catch (e) {
@@ -714,7 +733,7 @@ async function runOpInner(ctx: ToolContext, step: EditOp): Promise<OpResult> {
 
       for (const c of window) {
         try {
-          await gradeClip(ctx, sequenceId, trackIndex, c.clipIndex, look);
+          await gradeClip(ctx, sequenceId, trackIndex, c.clipIndex, look, gradeModeOf(step));
           steps.push(`grade:${c.clipIndex}`);
           if (throttleMs) await new Promise((r) => setTimeout(r, throttleMs));
         } catch {
@@ -1620,6 +1639,7 @@ async function runOpInner(ctx: ToolContext, step: EditOp): Promise<OpResult> {
         maxGrade: step.maxGrade ?? 24,
         maxTransitions: step.maxTransitions ?? 16,
         fadeEdges: step.fadeEdges,
+        gradeMode: step.gradeMode,
         throttleMs: 60,
       });
       if (qp.ok) steps.push("quality_pass");

@@ -296,8 +296,11 @@ edit_quality_pass { look: "cool", maxGrade: 24, clipFrom: 24 }
 | `hasMore` | `true` ise döngü devam |
 | `maxTransitions` | Bu batch’te en fazla kaç dissolve (default 16). **`0` = sadece sert kesme, geçiş yok** |
 | `fadeEdges` | `false` ise ilk clip fade-in / son clip fade-out eklenmez (default `true`) |
+| `gradeMode` | `absolute` (default): look değerlerini yazar. `relative`: look'un Lumetri varsayılanlarından farkını her klibin mevcut değerine ekler, mevcut düzeltmeler korunur. Üst üste eklenir: aynı kliplerde iki kez çalıştırırsan look iki kez uygulanır |
 
-> ⚠️ Renk düzeltmesi **mutlak** Lumetri değerleri yazar (Contrast/Shadows/Highlights/Saturation/Temperature/Tint). Clip’lerde zaten Lumetri düzeltmesi varsa üzerine yazılır — önce `effect_list_applied` veya `color_get_params` ile mevcut değerleri oku.
+> ⚠️ Varsayılan `gradeMode: "absolute"` **mutlak** Lumetri değerleri yazar (Contrast/Shadows/Highlights/Saturation/Temperature/Tint) ve klipteki mevcut düzeltmenin üzerine yazar. Klipler zaten düzeltilmişse `gradeMode: "relative"` kullan, ya da tek tek ince ayar için `color_adjust` (ör. `exposure: 0.3`, `saturation: -10`; seçili kliplere veya bir klip listesine uygulanır).
+
+**Overlay / light leak:** üst track'teki klibe `clip_set_blend_mode { mode: "screen", opacity: 80 }`. Diğer modlar: `linear_dodge` (add), `overlay`, `soft_light`, `multiply` ve diğerleri.
 
 - Fade-in: sadece `clipFrom: 0`  
 - Fade-out: sadece son batch  

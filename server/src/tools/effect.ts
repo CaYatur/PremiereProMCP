@@ -16,6 +16,38 @@ const paramValue = z.union([
   z.object({ r: z.number(), g: z.number(), b: z.number(), a: z.number().optional() }),
 ]);
 
+// Blend modes the Opacity component accepts; must match BLEND_MODES in
+// plugin/src/handlers/effect.js (checked by scripts/check-catalog.mjs).
+export const BLEND_MODE_NAMES = [
+  "normal",
+  "dissolve",
+  "darken",
+  "multiply",
+  "color_burn",
+  "linear_burn",
+  "darker_color",
+  "lighten",
+  "screen",
+  "color_dodge",
+  "linear_dodge",
+  "lighter_color",
+  "overlay",
+  "soft_light",
+  "hard_light",
+  "vivid_light",
+  "linear_light",
+  "pin_light",
+  "hard_mix",
+  "difference",
+  "exclusion",
+  "subtract",
+  "divide",
+  "hue",
+  "saturation",
+  "color",
+  "luminosity",
+] as const;
+
 export const effectTools = [
   defineTool({
     name: "effect_list_available",
@@ -100,6 +132,38 @@ export const effectTools = [
   }),
 
   defineTool({
+    name: "effect_adjust_param",
+    title: "Adjust an effect parameter by a delta",
+    description:
+      "Add a delta to a numeric effect parameter's CURRENT value instead of overwriting it (e.g. +10 Scale, −0.2 Exposure). Identify the param by paramIndex (from effect_list_applied) or paramName (first numeric param of that name). Optional min/max clamp the result. Keyframed params are refused: a static change would drop their keyframes. For Lumetri across many clips use color_adjust.",
+    inputSchema: {
+      ...clipRef,
+      effectIndex: z.number().int(),
+      paramIndex: z.number().int().optional(),
+      paramName: z.string().optional(),
+      delta: z.number(),
+      min: z.number().optional().describe("Lower bound for the result."),
+      max: z.number().optional().describe("Upper bound for the result."),
+    },
+    handler: async (p, ctx) => {
+      if (p.paramIndex === undefined && p.paramName === undefined) {
+        throw new Error("[INVALID_PARAMS] effect_adjust_param needs paramIndex or paramName — call effect_list_applied to find them.");
+      }
+      const data = (await ctx.relay.call("effect.adjustParam", p)) as {
+        paramName: string;
+        paramIndex: number;
+        from: number;
+        to: number;
+        clamped: boolean;
+      };
+      return {
+        text: `${data.paramName} (paramIndex ${data.paramIndex}): ${data.from} → ${data.to}${data.clamped ? " (clamped)" : ""}.`,
+        data,
+      };
+    },
+  }),
+
+  defineTool({
     name: "effect_get_param",
     title: "Get an effect parameter value",
     description: "Read one parameter value from an applied effect (best-effort getValue/getStartValue).",
@@ -107,6 +171,32 @@ export const effectTools = [
     handler: async (p, ctx) => {
       const data = await ctx.relay.call("effect.getParam", p);
       return { text: `Param: ${JSON.stringify(data)}`, data };
+    },
+  }),
+
+  defineTool({
+    name: "clip_set_blend_mode",
+    title: "Set a clip's blend mode (and opacity)",
+    description:
+      "Set the Opacity blend mode of a video clip, e.g. screen or linear_dodge for a light-leak overlay on an upper track, multiply for shadows, overlay/soft_light for texture. Optionally set opacity (0–100) in the same call. Returns the previous mode. Static only: this replaces keyframed opacity; use effect_set_opacity with atTicks to animate it.",
+    inputSchema: {
+      sequenceId: z.string().optional(),
+      trackType: z.literal("video").default("video"),
+      trackIndex: z.number().int(),
+      clipIndex: z.number().int(),
+      mode: z.enum(BLEND_MODE_NAMES),
+      opacity: z.number().min(0).max(100).optional(),
+    },
+    handler: async (p, ctx) => {
+      const data = (await ctx.relay.call("effect.setBlendMode", p)) as {
+        mode: string;
+        previous: string | number;
+        opacity?: number;
+      };
+      return {
+        text: `Blend mode ${data.previous} → ${data.mode}${data.opacity !== undefined ? `, opacity ${data.opacity}` : ""}.`,
+        data,
+      };
     },
   }),
 

@@ -147,6 +147,10 @@ const SESSION_VERIFIED_TOOLS = [
   "effect_set_opacity",
   "color_apply_lumetri",
   "color_set_basic_correction",
+  // Live-verified on 26.5.1 (issues #4, #6).
+  "color_adjust",
+  "effect_adjust_param",
+  "clip_set_blend_mode",
   "audio_set_gain",
   "audio_get_gain",
   "audio_normalize",

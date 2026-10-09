@@ -97,7 +97,7 @@ claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\no
 
 **その他の MCP クライアント** — Cline, Roo Code, Continue, Zed, LM Studio, JetBrains AI, Gemini CLI, Codex CLI… トランスポートに **`stdio`**（"local" / "command" / "process" と呼ばれることもあります）、コマンドに Node のパス、引数にサーバーのパスを 1 つ指定します。ほとんどが上記の `mcpServers` 形式です。リモート URL 欄しかないクライアントでは PPMCP は動きません。
 
-**`PPMCP_PROFILE`** — `core` (19) · `standard` (109, 既定) · `full` (277). これはセッションの*出発点*を決めるだけです。モデルは `tool_profile({ profile: "full" })` や `{ category: "color" }` で自分の道具立てを広げられ、`tool_invoke` は登録の有無にかかわらず任意のツールを実行します。
+**`PPMCP_PROFILE`** — `core` (19) · `standard` (112, 既定) · `full` (280). これはセッションの*出発点*を決めるだけです。モデルは `tool_profile({ profile: "full" })` や `{ category: "color" }` で自分の道具立てを広げられ、`tool_invoke` は登録の有無にかかわらず任意のツールを実行します。
 
 ```json
 "env": { "PPMCP_PROFILE": "standard" }
@@ -109,6 +109,6 @@ claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\no
 
 ## ツールの状態
 
-約20カテゴリに277個の MCP ツール。`clip_append` は実機で動作確認済み、`sequence_set_in_out` は動作確認済み（実機で確認。`sequence.createSetInPointAction` を呼ぶ、Premiere 25.6+）。確認済みの Adobe プラットフォーム制限: UXP API には空のトラックを追加するメソッドがない（`track_add`）— シーケンス作成時にトラック数を計画してください。最新の詳細な表は **[English README](./README.md#tool-status-whats-actually-tested)** または [docs/FEATURES.md](./docs/FEATURES.md) を参照。
+約20カテゴリに280個の MCP ツール。`clip_append` は実機で動作確認済み、`sequence_set_in_out` は動作確認済み（実機で確認。`sequence.createSetInPointAction` を呼ぶ、Premiere 25.6+）。確認済みの Adobe プラットフォーム制限: UXP API には空のトラックを追加するメソッドがない（`track_add`）— シーケンス作成時にトラック数を計画してください。最新の詳細な表は **[English README](./README.md#tool-status-whats-actually-tested)** または [docs/FEATURES.md](./docs/FEATURES.md) を参照。
 
 詳細は **[INSTALL.md](./INSTALL.md)** と English README。

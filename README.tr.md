@@ -116,18 +116,18 @@ claude mcp add premiere-pro --scope user -- "C:\Users\SEN\AppData\Local\PPMCP\no
 
 ### Arac yuzeyi — tavan degil, baslangic noktasi
 
-277 aracin hepsi yuklu. **Profil** yalnizca oturum baslarken kacinin *kayitli* oldugunu belirler; cunku 277 semayi birden modelin onune koymak her oturumda binlerce token'a mal olur ve arac secimini olcelebilir sekilde kotulestirir.
+280 aracin hepsi yuklu. **Profil** yalnizca oturum baslarken kacinin *kayitli* oldugunu belirler; cunku 280 semayi birden modelin onune koymak her oturumda binlerce token'a mal olur ve arac secimini olcelebilir sekilde kotulestirir.
 
 | `PPMCP_PROFILE` | Baslangicta kayitli | Ne zaman |
 |-----------------|---------------------|----------|
 | `core` | 19 | Kucuk/ucuz modeller; sadece `edit_bootstrap` → `edit_auto` → `edit_verify` |
-| `standard` *(varsayilan)* | 109 | Canli dogrulanmis araclar + gercek bir kurguda kullanilan atomikler |
-| `full` | 277 | Ilk turdan itibaren tum katalog acik, 1.0.x'teki gibi |
+| `standard` *(varsayilan)* | 112 | Canli dogrulanmis araclar + gercek bir kurguda kullanilan atomikler |
+| `full` | 280 | Ilk turdan itibaren tum katalog acik, 1.0.x'teki gibi |
 
 **Model bunu oturum ortasinda kendisi genisletebilir.** Daha fazlasina ihtiyaci olduguna karar verirse `tool_profile` cagirir — yeniden baslatma yok, config duzenleme yok, sana sorma yok:
 
 ```
-tool_profile { profile: "full" }     // 277 aracin hepsini kaydet
+tool_profile { profile: "full" }     // 280 aracin hepsini kaydet
 tool_profile { category: "color" }   // tek bir alani kaydet, eklemeli
 tool_profile { enable: ["clip_reverse"] }
 ```
@@ -162,7 +162,7 @@ PPMCP, AI ajanini **calisan Premiere Pro**'ya baglayan bir MCP sunucusudur: seka
 
 ## Arac durumu: gercekte test edilen neler
 
-**277 MCP arac**, ~20 kategoride. 1.1.0'dan itibaren sunucu tum katalogu degil bir **profil** kaydediyor (varsayilan 109); geri kalani `tool_search` → `tool_schema` → `tool_invoke` ile tek cagri uzakta, `PPMCP_PROFILE=full` eski yuzeyi geri getiriyor. Katalog su kategorileri kapsiyor: project, sequence, track, clip, transition, effect — 52 tek-atislik ozel effect/audio/transition kisayolu dahil — color/Lumetri, audio, text/title/shape, marker/metadata, multicam, proxy/media, export, analysis, batch, selection/system, checkpoint, agent-orchestration/edit-pipeline, arti ~22 ust-seviye workflow arac). Bu araclarin cogu Adobe'nin kendi `@adobe/premierepro` UXP API'sindeki gercek, dokumante edilmis bir metoda karsilik geliyor. Gercek ucdan uca oturumlar artik asagidaki ~48s'lik duman testinden cok daha genis bir kismini calistirdi; su ana kadar cikan sorunlar asagida isaretlenenler ("Hala bozuk" ve "Dusuk guvenirlikli iddialar") — detayli arac-bazli dogrulama seviyesi icin [docs/FEATURES.md](./docs/FEATURES.md)'e bak.
+**280 MCP arac**, ~20 kategoride. 1.1.0'dan itibaren sunucu tum katalogu degil bir **profil** kaydediyor (varsayilan 112); geri kalani `tool_search` → `tool_schema` → `tool_invoke` ile tek cagri uzakta, `PPMCP_PROFILE=full` eski yuzeyi geri getiriyor. Katalog su kategorileri kapsiyor: project, sequence, track, clip, transition, effect — 52 tek-atislik ozel effect/audio/transition kisayolu dahil — color/Lumetri, audio, text/title/shape, marker/metadata, multicam, proxy/media, export, analysis, batch, selection/system, checkpoint, agent-orchestration/edit-pipeline, arti ~22 ust-seviye workflow arac). Bu araclarin cogu Adobe'nin kendi `@adobe/premierepro` UXP API'sindeki gercek, dokumante edilmis bir metoda karsilik geliyor. Gercek ucdan uca oturumlar artik asagidaki ~48s'lik duman testinden cok daha genis bir kismini calistirdi; su ana kadar cikan sorunlar asagida isaretlenenler ("Hala bozuk" ve "Dusuk guvenirlikli iddialar") — detayli arac-bazli dogrulama seviyesi icin [docs/FEATURES.md](./docs/FEATURES.md)'e bak.
 
 **Gercek, ucdan uca bir testte iyi calisan** (sifirdan kurulan ~48s'lik cok-track'li sequence: video + 4 audio track, transition, gain, keyframe'li fade, marker, title, screenshot, save): sequence/project olusturma, `clip_overwrite`, trim, roll/slip/slide, split, ripple delete, sekil ekleme + konum + dolgu rengi, `text_write`'in PNG fallback yolu, effect/transition listeleme, gain/dB kontrolu, project save/screenshot. **`clip_append` artik gercek bir oturumda calistigi dogrulandi** — klipleri dogru sirayla ekliyor (onceden `"Script action failed to execute"` ile basarisiz oluyordu; paylasimli-retry duzeltmesi canli olarak tuttu). **`sequence_set_in_out` de artik dogrulandi** (2026-07-11 yeniden test) — in/out noktalarini `"via": "sequence.createSetInPointAction + sequence.createSetOutPointAction"` ile set etti, 1.0.1'deki kok-neden duzeltmesini teyit etti (factory `SequenceEditor`'da degil, Sequence nesnesinde). Coklu adimli duzenlemeler (roll/slip/slide ve birlesik workflow araclari) Premiere'in `Project.executeTransaction()` mekanizmasi uzerinden tek atomik islem olarak commit ediliyor — yani islem yarida kesilirse timeline yarim-duzenlenmis halde kalmiyor. Bu transaction tasarimi eklentinin en guvenilir parcasi oldu.
 

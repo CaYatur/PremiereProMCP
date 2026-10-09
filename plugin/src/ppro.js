@@ -356,6 +356,34 @@ async function readParamValue(param) {
   return out;
 }
 
+/** Nudge a numeric param by `delta` (issue #4), clamped to [min, max] when
+ * given. Reads the current value with getStartValue(). Refuses keyframed
+ * params: setParamValue switches time-varying off, which drops keyframes. */
+async function adjustParamValue(project, param, delta, { min, max, label }) {
+  const current = await readParamValue(param);
+  if (current.valueType !== "number" || typeof current.value !== "number") {
+    const e = new Error(`"${param.displayName}" is not a numeric param (valueType ${current.valueType}).`);
+    e.code = "INVALID_PARAMS";
+    throw e;
+  }
+  if (current.keyframed) {
+    const e = new Error(
+      `"${param.displayName}" is keyframed; a relative change would drop its keyframes. Set keyframes with atTicks instead.`,
+    );
+    e.code = "INVALID_PARAMS";
+    throw e;
+  }
+  const requested = current.value + delta;
+  let target = requested;
+  if (typeof min === "number" && target < min) target = min;
+  if (typeof max === "number" && target > max) target = max;
+  if (target !== current.value) await setParamValue(project, param, target, label);
+  // Premiere clamps to its own hard limits too; trust what reads back.
+  const after = await readParamValue(param);
+  const to = typeof after.value === "number" ? after.value : target;
+  return { from: current.value, to, requested, clamped: Math.abs(to - requested) > 1e-6 };
+}
+
 /** Coerce a tool-supplied value to the param's current value type, so
  * "20" → 20 for sliders and "true" → true for checkboxes. Throws
  * INVALID_PARAMS for values that can't be converted. */
@@ -508,4 +536,5 @@ module.exports = {
   getBinChildren,
   readParamValue,
   coerceToParamType,
+  adjustParamValue,
 };
