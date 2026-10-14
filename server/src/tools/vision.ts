@@ -118,7 +118,7 @@ function inlineImage(
   const maxBytes = 4_000_000;
   const images =
     buf.length <= maxBytes ? [{ data: buf.toString("base64"), mimeType }] : undefined;
-  const pure = /export\.|h264|ffmpeg|png-sequence|still/i.test(via) && !/window|program-monitor|main|desktop/i.test(via);
+  const pure = /exportSequenceFrame|export\.|h264|ffmpeg|png-sequence|still/i.test(via) && !/window|program-monitor|main|desktop/i.test(via);
   const premiereWin = /premiere-main|program-monitor/i.test(via);
   const desktop = /desktop/i.test(via);
   const sz = /\.png$/i.test(outputPath) ? readPngSize(outputPath) : null;
@@ -339,6 +339,33 @@ async function captureFramePipeline(
     }
     return result;
   };
+
+  // First: Premiere's own still export (UXP Exporter.exportSequenceFrame,
+  // 25.x+). Renders the real sequence frame at full frame size with no UI
+  // chrome and no AME. Live-verified on 26.5.2. Only stills (png/jpg/...)
+  // go this way; it never moves the playhead.
+  if (/\.(png|jpe?g|bmp)$/i.test(outputPath)) {
+    try {
+      const native = (await ctx.relay.call(
+        "export.frame",
+        { sequenceId: opts.sequenceId, atTicks, outputPath },
+        15000,
+      )) as { exported?: boolean; via?: string };
+      if (native?.exported && native.via === "Exporter.exportSequenceFrame") {
+        const ready = await waitForFile(outputPath, 5000, 200);
+        if (ready && isUsableStill(outputPath)) {
+          return finish(
+            inlineImage(outputPath, atTicks, frame, native.via, { pureSequenceFrame: true, noFullRender: true }),
+          );
+        }
+        attempts.push("native-export: file did not appear");
+      } else {
+        attempts.push(`native-export: ${native?.via ?? "not exported"}`);
+      }
+    } catch (e) {
+      attempts.push(`native-export: ${e instanceof Error ? e.message : e}`);
+    }
+  }
 
   // Optional short encode first (never full sequence)
   if (opts.tryEncodeFirst) {

@@ -62,6 +62,30 @@ async function tryDirectExportFrame(sequence, project, atTicks, outputPath) {
 
   for (const [label, fn] of [
     [
+      // Documented UXP API (Premiere 25.x+), live-verified on 26.5.2:
+      // Exporter.exportSequenceFrame(sequence, time, fileName, folderPath, width, height)
+      "Exporter.exportSequenceFrame",
+      async () => {
+        const Exp = ppro.Exporter;
+        if (!Exp || typeof Exp.exportSequenceFrame !== "function") throw new Error("missing");
+        const m = String(outputPath).match(/^(.*)[\\/]([^\\/]+)$/);
+        if (!m) throw new Error("outputPath must be an absolute file path");
+        let width = 1920;
+        let height = 1080;
+        try {
+          const size = await sequence.getFrameSize();
+          if (size && size.width && size.height) {
+            width = Math.round(size.width);
+            height = Math.round(size.height);
+          }
+        } catch {
+          /* keep 1080p default */
+        }
+        const ok = await Exp.exportSequenceFrame(sequence, time, m[2], m[1], width, height);
+        if (ok === false) throw new Error("exportSequenceFrame returned false");
+      },
+    ],
+    [
       "sequence.exportFrame",
       async () => {
         if (typeof sequence.exportFrame !== "function") throw new Error("missing");
