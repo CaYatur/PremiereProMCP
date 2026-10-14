@@ -6,6 +6,19 @@ All notable changes to PPMCP are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `workflow_clean_silence` placed its markers at the silence's time inside the
+  media file, not on the timeline, so they were wrong for any clip that
+  doesn't start at 0:00 untrimmed. Markers are now placed for every instance
+  of the file in the sequence (clip start + offset from its in point, scaled
+  by speed, trimmed to the visible range). If the file isn't in the sequence,
+  no markers are added and the regions are returned with a note; the new
+  optional `sequenceOffsetSeconds` places them manually. The description no
+  longer mentions a nonexistent `applyCuts` option.
+- `clip.list` / `clip.getProperties` now also return the clip's
+  `mediaFilePath`.
+
 ## [1.2.0] — 2026-10-09
 
 ### Added

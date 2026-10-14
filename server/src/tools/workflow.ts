@@ -1,7 +1,31 @@
 import { z } from "zod";
 import { defineTool } from "../toolDefinition.js";
-import { detectSilenceInFile, findFfmpeg, transcribeMedia } from "../mediaAnalysis.js";
+import { detectSilenceInFile, findFfmpeg, secondsToTicks, transcribeMedia } from "../mediaAnalysis.js";
 import { placeText } from "../textEngine.js";
+import type { RelayClient } from "../relayClient.js";
+import { mapSourceRegionsToSequence, type MappedRegion, type PlacedClip } from "../silenceMapping.js";
+
+const TICKS_PER_SECOND_N = 254016000000;
+const ticksToSeconds = (t: bigint) => Number(t) / TICKS_PER_SECOND_N;
+
+/** Every track item in the sequence (video + audio), tagged with its track. */
+async function listPlacedClips(
+  ctx: { relay: RelayClient },
+  sequenceId: string | undefined,
+): Promise<PlacedClip[]> {
+  const tracks = (await ctx.relay.call("track.list", sequenceId ? { sequenceId } : {})) as Array<{
+    trackType: string;
+    trackIndex: number;
+  }>;
+  const out: PlacedClip[] = [];
+  for (const t of tracks ?? []) {
+    const clips = (await ctx.relay
+      .call("clip.list", { sequenceId, trackType: t.trackType, trackIndex: t.trackIndex })
+      .catch(() => [])) as PlacedClip[];
+    for (const c of clips ?? []) out.push({ ...c, trackType: t.trackType, trackIndex: t.trackIndex });
+  }
+  return out;
+}
 
 // High-level composites. Silence clean + captions use real ffmpeg/STT
 // (server/src/mediaAnalysis.ts). Multicam auto-sync still omitted (no API).
@@ -1022,7 +1046,7 @@ export const workflowTools = [
     name: "workflow_clean_silence",
     title: "Mark silence regions for cleanup",
     description:
-      "Real ffmpeg silence detect on a media file, then add markers (and optional report) for silence regions. Does NOT auto-ripple-delete by default (destructive) — set applyCuts only after review. Safer than blind auto-cut.",
+      "Real ffmpeg silence detect on a media file, then add sequence markers for the silence regions. Silence is measured in the file's own time; markers are placed at sequence time for every instance of that file in the sequence (clip start + offset from its in point, scaled by clip speed, trimmed to the visible part). If the file isn't in the sequence no markers are added unless sequenceOffsetSeconds is given. Never deletes anything — review the markers, then cut with clip_ripple_delete or manually.",
     inputSchema: {
       mediaPath: z.string(),
       sequenceId: z.string().optional(),
@@ -1030,6 +1054,13 @@ export const workflowTools = [
       minDuration: z.number().optional().default(0.4),
       addMarkers: z.boolean().optional().default(true),
       maxMarkers: z.number().int().optional().default(40),
+      sequenceOffsetSeconds: z
+        .number()
+        .min(0)
+        .optional()
+        .describe(
+          "Optional: skip the track scan and treat the file as starting (untrimmed, speed 1) at this many seconds into the sequence. Use when the clip can't be matched by path, e.g. it was replaced or renamed.",
+        ),
     },
     handler: async (p, ctx) => {
       if (!findFfmpeg()) {
@@ -1040,26 +1071,53 @@ export const workflowTools = [
         minDuration: p.minDuration,
       });
       const markers = [];
-      if (p.addMarkers) {
-        for (const r of det.regions.slice(0, p.maxMarkers)) {
+      let mapped: MappedRegion[] = [];
+      let matchedClips = 0;
+      let note: string | undefined;
+      if (p.addMarkers && det.regions.length > 0) {
+        let placed: PlacedClip[];
+        let filterPath: string | undefined;
+        if (p.sequenceOffsetSeconds !== undefined) {
+          const offset = BigInt(secondsToTicks(p.sequenceOffsetSeconds));
+          const last = det.regions.reduce((m, r) => (BigInt(r.endTicks) > m ? BigInt(r.endTicks) : m), 0n);
+          placed = [{ clipIndex: -1, startTicks: String(offset), endTicks: String(offset + last), inPointTicks: "0", speed: 1 }];
+        } else {
+          placed = await listPlacedClips(ctx, p.sequenceId);
+          filterPath = p.mediaPath;
+        }
+        const res = mapSourceRegionsToSequence(det.regions, placed, filterPath);
+        matchedClips = res.matchedClips;
+        mapped = res.mapped;
+        if (matchedClips === 0) {
+          note =
+            "The media file was not found in the sequence (no track item uses this path), so no markers were added — placing them at file time would put them in the wrong place. Add the clip to the sequence, or pass sequenceOffsetSeconds.";
+        } else if (mapped.length === 0) {
+          note = "The clip is in the sequence, but none of the silence regions fall inside its trimmed (visible) range.";
+        }
+        for (const m of mapped.slice(0, p.maxMarkers)) {
+          const durSec = ticksToSeconds(BigInt(m.sequenceEndTicks) - BigInt(m.sequenceStartTicks));
           try {
             const data = await ctx.relay.call("marker.add", {
               sequenceId: p.sequenceId,
-              atTicks: r.startTicks,
-              name: `SILENCE ${r.durationSeconds.toFixed(1)}s`,
-              comments: `end ${r.endSeconds.toFixed(2)}s — review before cut`,
+              atTicks: m.sequenceStartTicks,
+              name: `SILENCE ${durSec.toFixed(1)}s`,
+              comments: `sequence ${ticksToSeconds(BigInt(m.sequenceStartTicks)).toFixed(2)}–${ticksToSeconds(BigInt(m.sequenceEndTicks)).toFixed(2)}s (source ${ticksToSeconds(BigInt(m.sourceStartTicks)).toFixed(2)}–${ticksToSeconds(BigInt(m.sourceEndTicks)).toFixed(2)}s) — review before cut`,
             });
-            markers.push({ ok: true, data, region: r });
+            markers.push({ ok: true, data, region: m });
           } catch (e) {
-            markers.push({ ok: false, error: e instanceof Error ? e.message : String(e), region: r });
+            markers.push({ ok: false, error: e instanceof Error ? e.message : String(e), region: m });
           }
         }
       }
+      const okCount = markers.filter((m) => m.ok).length;
       return {
-        text: `Silence clean: ${det.regions.length} region(s), ${markers.filter((m) => m.ok).length} marker(s). Review markers before cutting.`,
+        text: `Silence clean: ${det.regions.length} region(s) in the file, ${okCount} marker(s) at sequence time.${note ? " " + note : ""} Review markers before cutting.`,
         data: {
           regions: det.regions,
+          sequenceRegions: mapped,
+          matchedClips,
           markers,
+          ...(note ? { note } : {}),
           engine: det.engine,
           tip: "Use clip_ripple_delete / manual cuts at markers. Auto-delete omitted for safety.",
         },
