@@ -117,7 +117,7 @@ export const convenienceTools = [
             sequenceId: p.sequenceId,
             atTicks: m.atTicks,
             name: m.name,
-            comments: m.comments,
+            comment: m.comments,
           });
           results.push({ ...m, ok: true, data });
         } catch (e) {

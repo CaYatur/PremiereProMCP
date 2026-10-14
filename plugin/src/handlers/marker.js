@@ -63,14 +63,15 @@ async function nativeList(sequence) {
 }
 
 module.exports = {
-  "marker.add": async ({ sequenceId, atTicks, name, comment, durationTicks, markerType }) => {
+  "marker.add": async ({ sequenceId, atTicks, name, comment, comments, durationTicks, markerType }) => {
     const project = await getActiveProject();
     const sequence = await getSequence(project, sequenceId);
     const typeVal = markerTypeValue(markerType);
     const start = startTimeFromTicks(atTicks);
     const duration = durationTicks ? tickTime(durationTicks) : ppro.TickTime.TIME_ZERO;
     const markerName = name || "Marker";
-    const markerComment = comment || "";
+    // Some callers send `comments` (plural); accept both spellings.
+    const markerComment = comment ?? comments ?? "";
 
     // 1) Native Premiere markers — try several type/duration combos (build-dependent)
     const nativeErrors = [];

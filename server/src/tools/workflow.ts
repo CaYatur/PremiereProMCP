@@ -1101,7 +1101,8 @@ export const workflowTools = [
               sequenceId: p.sequenceId,
               atTicks: m.sequenceStartTicks,
               name: `SILENCE ${durSec.toFixed(1)}s`,
-              comments: `sequence ${ticksToSeconds(BigInt(m.sequenceStartTicks)).toFixed(2)}–${ticksToSeconds(BigInt(m.sequenceEndTicks)).toFixed(2)}s (source ${ticksToSeconds(BigInt(m.sourceStartTicks)).toFixed(2)}–${ticksToSeconds(BigInt(m.sourceEndTicks)).toFixed(2)}s) — review before cut`,
+              durationTicks: (BigInt(m.sequenceEndTicks) - BigInt(m.sequenceStartTicks)).toString(),
+              comment: `sequence ${ticksToSeconds(BigInt(m.sequenceStartTicks)).toFixed(2)}–${ticksToSeconds(BigInt(m.sequenceEndTicks)).toFixed(2)}s (source ${ticksToSeconds(BigInt(m.sourceStartTicks)).toFixed(2)}–${ticksToSeconds(BigInt(m.sourceEndTicks)).toFixed(2)}s) — review before cut`,
             });
             markers.push({ ok: true, data, region: m });
           } catch (e) {
