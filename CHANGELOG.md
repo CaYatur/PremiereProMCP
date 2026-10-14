@@ -6,7 +6,25 @@ All notable changes to PPMCP are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+
+- `transcript_get`: read Premiere's own Speech-to-Text transcript of a clip
+  (UXP `Transcript` API) as segments or words, mapped to sequence time for
+  every instance of the clip. `transcribe: true` runs Premiere's
+  transcription first when the clip has none.
+- `transcript_find_phrase`: find every place a phrase is spoken and return
+  its sequence ranges; optionally add a marker spanning each hit.
+- `workflow_cut_silence`: confirmed silence cutting. The dry run returns the
+  exact ranges (padding kept next to speech, short cuts skipped), the total
+  seconds removed and a `planToken`; `confirm: true` with that token splits
+  and ripple-deletes each range on the clip and its linked audio/video, from
+  the end of the timeline backward. A wrong or stale token is refused.
+
 ### Fixed
+
+- `clip_split` at a time that isn't on a frame boundary failed halfway
+  ("could not find the clone") and lost the left part of the clip. The cut is
+  now snapped to the nearest sequence frame.
 
 - `workflow_clean_silence` placed its markers at the silence's time inside the
   media file, not on the timeline, so they were wrong for any clip that

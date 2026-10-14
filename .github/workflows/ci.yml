@@ -53,6 +53,11 @@ jobs:
       - name: Silence marker mapping tests
         run: node scripts/test-silence-mapping.mjs
 
+      # transcript -> sequence-time mapping, phrase search and the
+      # dry-run / planToken / back-to-front apply flow of workflow_cut_silence.
+      - name: Transcript and silence-cut tests
+        run: node scripts/test-transcript-and-cut.mjs
+
       - name: Tool profile check
         run: node scripts/check-profiles.mjs
 

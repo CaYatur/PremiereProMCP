@@ -12,6 +12,7 @@ const transition = require("./transition.js");
 const marker = require("./marker.js");
 const selection = require("./selection.js");
 const media = require("./media.js");
+const transcript = require("./transcript.js");
 const debug = require("./debug.js");
 // debug.js is registered during gap investigation (text/shape/insert/marker).
 // Not exposed as MCP tools — only raw relay methods for live probes.
@@ -34,5 +35,6 @@ module.exports = {
   ...marker,
   ...selection,
   ...media,
+  ...transcript,
   ...debug,
 };

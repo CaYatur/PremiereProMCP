@@ -20,6 +20,7 @@ import { visionTools } from "./vision.js";
 import { convenienceTools } from "./convenience.js";
 import { agentOrchestrationTools } from "./agentOrchestration.js";
 import { checkpointTools } from "./checkpoint.js";
+import { transcriptTools } from "./transcript.js";
 
 // Tool surface:
 // 1) agentOrchestration FIRST in catalog intent (models should prefer these)
@@ -45,6 +46,7 @@ export const allTools = [
   ...selectionTools,
   ...mediaTools,
   ...analyzeTools,
+  ...transcriptTools,
   ...batchTools,
   ...visionTools,
   ...convenienceTools,

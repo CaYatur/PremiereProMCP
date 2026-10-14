@@ -6,7 +6,7 @@
 [![Release](https://img.shields.io/github/v/release/CaYatur/PremiereProMCP)](https://github.com/CaYatur/PremiereProMCP/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows-blue)
-![Tools: 280, 112 registered by default](https://img.shields.io/badge/MCP%20tools-280%20(112%20default)-orange)
+![Tools: 283, 112 registered by default](https://img.shields.io/badge/MCP%20tools-283%20(112%20default)-orange)
 
 **Developer:** [CaYaDev](https://cayadev.com) · [cayadev.com](https://cayadev.com)
 
@@ -144,18 +144,18 @@ claude mcp add premiere-pro --scope user -- "C:\Users\You\AppData\Local\PPMCP\no
 
 ### The tool surface — a starting point, not a cap
 
-All 280 tools are loaded. A **profile** only decides how many are *registered* when the session starts, because putting 280 schemas in front of a model costs thousands of tokens and measurably worsens tool selection.
+All 283 tools are loaded. A **profile** only decides how many are *registered* when the session starts, because putting 283 schemas in front of a model costs thousands of tokens and measurably worsens tool selection.
 
 | `PPMCP_PROFILE` | Registered at start | Use when |
 |-----------------|--------------------|----------|
 | `core` | 19 | Small/cheap models; `edit_bootstrap` → `edit_auto` → `edit_verify` only |
 | `standard` *(default)* | 112 | Live-verified tools plus the atomics a real cut uses |
-| `full` | 280 | Entire catalog resident from the first turn, as in 1.0.x |
+| `full` | 283 | Entire catalog resident from the first turn, as in 1.0.x |
 
 **The model can widen this itself, mid-session.** If it decides it needs more, it calls `tool_profile` — no restart, no config edit, no asking you:
 
 ```
-tool_profile { profile: "full" }     // register all 280
+tool_profile { profile: "full" }     // register all 283
 tool_profile { category: "color" }   // register one area, additive
 tool_profile { enable: ["clip_reverse"] }
 ```
@@ -261,7 +261,7 @@ Rough cuts · cinematic SFX · music-rhythm cuts · ad-style motion cards · QA 
 
 ## Tool status: what's actually tested
 
-**280 MCP tools** across ~20 categories. Since 1.1.0 the server registers a **profile** (112 by default) rather than the whole catalog — the rest stay one call away via `tool_search` → `tool_schema` → `tool_invoke`, and `PPMCP_PROFILE=full` restores the old surface. The catalog spans project, sequence, track, clip, transitions, effects — including 52 one-shot dedicated effect/audio/transition shortcuts — color/Lumetri, audio, text/titles/shapes, markers/metadata, multicam, proxy/media, export, analysis, batch, selection/system, checkpoints, agent-orchestration/edit-pipeline, plus ~22 high-level workflow tools). Most of that surface maps to a real, documented method in Adobe's own `@adobe/premierepro` UXP API. Real end-to-end sessions have now exercised a much wider slice of it than the ~48s smoke sequence below; the issues surfaced so far are the ones flagged below (see "Still broken" and "Lower-confidence claims") — see [docs/FEATURES.md](./docs/FEATURES.md) for the full tool-by-tool verification tier (type-verified / live-verified / verified-composed / known-broken).
+**283 MCP tools** across ~20 categories. Since 1.1.0 the server registers a **profile** (112 by default) rather than the whole catalog — the rest stay one call away via `tool_search` → `tool_schema` → `tool_invoke`, and `PPMCP_PROFILE=full` restores the old surface. The catalog spans project, sequence, track, clip, transitions, effects — including 52 one-shot dedicated effect/audio/transition shortcuts — color/Lumetri, audio, text/titles/shapes, markers/metadata, multicam, proxy/media, export, analysis, batch, selection/system, checkpoints, agent-orchestration/edit-pipeline, plus ~22 high-level workflow tools). Most of that surface maps to a real, documented method in Adobe's own `@adobe/premierepro` UXP API. Real end-to-end sessions have now exercised a much wider slice of it than the ~48s smoke sequence below; the issues surfaced so far are the ones flagged below (see "Still broken" and "Lower-confidence claims") — see [docs/FEATURES.md](./docs/FEATURES.md) for the full tool-by-tool verification tier (type-verified / live-verified / verified-composed / known-broken).
 
 **What holds up well under real, end-to-end testing** (a real ~48s multi-track sequence built from scratch, video + 4 audio tracks, transitions, gain, keyframed fades, markers, title, screenshot, save): sequence/project creation, `clip_overwrite`, trim, roll/slip/slide, split, ripple delete, shape add + position + fill color, `text_write`'s PNG fallback path, listing effects/transitions, gain/dB control, and project save/screenshot. **`clip_append` is now confirmed working in a real session** — it appends clips in the correct order (it previously failed with `"Script action failed to execute"`; the shared-retry fix held up live). **`sequence_set_in_out` is confirmed working too** (re-tested 2026-07-11) — it set the in/out points via `"via": "sequence.createSetInPointAction + sequence.createSetOutPointAction"`, confirming the 1.0.1 root-cause fix (the factory is on the Sequence object, not `SequenceEditor`). Multi-step edits (roll/slip/slide and composite workflow tools) are committed through Premiere's `Project.executeTransaction()` — several primitive actions run as one atomic unit, so a failure partway through doesn't leave the timeline half-edited. That transaction design has been the most reliable part of the whole plugin.
 
@@ -277,6 +277,9 @@ Rough cuts · cinematic SFX · music-rhythm cuts · ad-style motion cards · QA 
 | `workflow_clean_silence` | Markers were placed at source-file time, not sequence time | Maps each silence region through every sequence clip that uses the file (start, in-point, speed). Live: markers at 6.005 s / 8.005 s for a clip at 5.5 s trimmed by 0.495 s |
 | `shape_set_size` | Width/height averaged into one uniform Scale, so only 2:1 sizes came out right | Turns off uniform scale and sets Scale Width = w/400, Scale = h/200 (the Basic Shape rectangle is 400x200 px). Live: 600x100 -> rendered red box measured 604x104 px in an exported frame (anti-aliased edges) |
 | `export_frame` / `sequence_export_still` / `sequence_export_frame` | Fell back to a screenshot of the whole Premiere window (the plugin only tried non-existent `exportFrame` methods) | Uses Premiere's documented `Exporter.exportSequenceFrame` first: a real 1920x1080 sequence frame, no UI, no AME, playhead untouched. Live: PNG and JPEG |
+| `transcript_get` / `transcript_find_phrase` (new) | No way to read Premiere's transcript | Uses Premiere's UXP `Transcript` API (`transcribeClipProjectItem`, `exportToJSON`) and maps every segment/word to sequence time for each instance of the clip (in point, speed and trims respected). Live: TTS test clip transcribed by Premiere via the tool; "lazy dog" found at 6.14-6.98 s and, in a second copy trimmed to source 4.0 s and placed at 19 s, at 21.14-21.98 s; markers added |
+| `workflow_cut_silence` (new) | Silence could only be marked, not cut | Dry run returns the exact ranges, total seconds and a `planToken`; `confirm: true` + that token splits and ripple-deletes each range (linked A/V too), latest first. Refuses a wrong or stale token. Live: 11.84 s clip -> 3 cuts, 5.48 s removed, 6.36 s left in 3 gap-free pieces; every sentence still found by `transcript_find_phrase` afterwards |
+| `clip_split` | Splitting at a time that isn't on a frame boundary left a half-done split ("could not find the clone"), losing the left part | Cut time is snapped to the nearest sequence frame first. Live: split at 8.0003 s -> clean split at 8.0 s |
 
 **Still broken — confirmed Adobe platform limitation, not a plugin bug:**
 

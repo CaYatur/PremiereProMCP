@@ -1,7 +1,7 @@
 # Feature / Tool List
 
 > **⚠ IMPLEMENTATION STATUS (updated 2026-07-11, post-install real-app
-> testing pass):** 280 MCP tools are implemented in code (server
+> testing pass):** 283 MCP tools are implemented in code (server
 > `allTools`, `server/src/tools/index.ts` — counted at runtime: 228 in the
 > per-category files + 52 generated dedicated effect/audio/transition
 > shortcuts). Most of the catalog below is
@@ -132,7 +132,7 @@ transitions all map to real, documented methods. **That core — the actual
 The same pass also *specifically checked* the creative/analysis surface the
 first research pass flagged as risky, and found real gaps: **no
 dedicated Lumetri/color API, no waveform/scope data readout, no
-auto-transcription trigger (only transcript JSON import/export), no
+auto-transcription trigger (only transcript JSON import/export; **update 2026-10-14:** on Premiere 26.5.2 `Transcript.transcribeClipProjectItem(item, { language })` exists and works live), no
 freeform text/title creation (MOGRT insert only), no Essential-Sound preset
 methods (ducking/noise reduction/dialogue enhance), and no multicam
 sync/create/switch-angle methods** (only `isMulticamClip()` exists). Every
@@ -247,7 +247,7 @@ incl. `AE.ADBE MorphCut` (again, enumeration only). Active project + root
 returned something whose downstream reads never populated, most likely
 because the test project had no sequence open — untested, not proven
 broken. `Transcript.querySupportedLanguages()`: confirmed **broken** at
-runtime despite being in the type declarations. `Application.version`:
+runtime despite being in the type declarations. **Re-checked 2026-10-14 on Premiere 26.5.2: it now works** (returns en-us, en-gb, ...). `Application.version`:
 resolved to `undefined` at runtime despite being a documented `readonly`
 property — a second, smaller type-vs-runtime gap.
 
@@ -290,6 +290,8 @@ see PLAN.md §3.
 | `workflow_add_lower_third` | Insert a styled lower-third graphic at the playhead/selection with given text 🧩✅ (technique fully confirmed; use our own bundled AE-authored lower-third template, not Adobe's non-`[AE]` ones which are confirmed broken for this) |
 | `workflow_sync_and_build_multicam` | Sync multicam sources and build a ready-to-cut multicam sequence ❔ (entire multicam category unconfirmed) |
 | `workflow_clean_silence` | Detect and ripple-delete silence across a sequence or selection ❔ (delete step confirmed; silence *detection* is a from-scratch implementation) |
+| `workflow_cut_silence` | Two-step silence removal: dry-run plan (ranges, total seconds, padding, min cut, `planToken`), then `confirm` + token splits and ripple-deletes each range back to front ✅ (live-verified 2026-10-14: 5.48 s removed from an 11.84 s clip, speech intact) |
+| `transcript_get` / `transcript_find_phrase` | Premiere's own transcript at sequence time; find a phrase and optionally mark it ✅ (live-verified 2026-10-14) |
 | `workflow_prep_for_export` | Normalize audio loudness, check for offline media, and export with a named preset in one call |
 | `workflow_summarize_timeline` | Return a compact, model-readable summary of the current sequence (clips, gaps, duration, markers) |
 | `workflow_apply_chroma_key` | Add and configure a green/blue-screen key on a clip in one call 🔧 (`Ultra Key` live-confirmed to exist in the 105-filter catalog; parameter mapping not yet probed) |
@@ -495,6 +497,7 @@ mute only is confirmed; **the live probe confirmed
 runtime** — the documented Transcript API is not reliable as-is and needs
 its own targeted runtime testing (the MOGRT ExtendScript workaround does
 **not** apply here — captions aren't MOGRT graphics).
+**Update 2026-10-14 (Premiere 26.5.2, live):** the Transcript API works - `querySupportedLanguages()`, `hasTranscript()`, `transcribeClipProjectItem(item, { language })` and `exportToJSON(item)` all returned real data. `transcript_get` and `transcript_find_phrase` are built on it (segment/word times mapped to sequence time), live-verified.
 **Note: the shipped tool names differ from the planning names used in the
 narrative above** — the "`title_create_text`"-style read→edit→write→re-read
 round-trip described above shipped as the `text_write`/`text_add` resilient

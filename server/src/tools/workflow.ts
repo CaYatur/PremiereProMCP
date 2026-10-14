@@ -4,12 +4,13 @@ import { detectSilenceInFile, findFfmpeg, secondsToTicks, transcribeMedia } from
 import { placeText } from "../textEngine.js";
 import type { RelayClient } from "../relayClient.js";
 import { mapSourceRegionsToSequence, type MappedRegion, type PlacedClip } from "../silenceMapping.js";
+import { planSilenceCuts, type CutRange } from "../silenceCut.js";
 
 const TICKS_PER_SECOND_N = 254016000000;
 const ticksToSeconds = (t: bigint) => Number(t) / TICKS_PER_SECOND_N;
 
 /** Every track item in the sequence (video + audio), tagged with its track. */
-async function listPlacedClips(
+export async function listPlacedClips(
   ctx: { relay: RelayClient },
   sequenceId: string | undefined,
 ): Promise<PlacedClip[]> {
@@ -1127,6 +1128,115 @@ export const workflowTools = [
   }),
 
   defineTool({
+    name: "workflow_cut_silence",
+    title: "Cut silence (dry run, then confirmed ripple delete)",
+    description:
+      "Two-step silence removal for a media file in the sequence. Step 1 (default, confirm omitted): ffmpeg silence detect, map to sequence time, and return a PLAN — the exact sequence ranges to remove (keeping paddingSeconds of audio next to speech, skipping cuts shorter than minCutSeconds), total seconds removed and a planToken. Nothing is changed. Step 2: call again with the SAME settings plus confirm: true and that planToken; it re-checks the plan (refuses if the timeline or settings changed), then for each range from the end of the timeline backward splits the clip at both edges and ripple-deletes the piece on the clip and its linked audio/video. Each cut is ~3 undo steps in Premiere (Edit > Undo); run checkpoint_create first if you want a file-level rollback (it saves the project).",
+    inputSchema: {
+      mediaPath: z.string(),
+      sequenceId: z.string().optional(),
+      noiseDb: z.number().optional().default(-30),
+      minDuration: z.number().optional().default(0.4).describe("Minimum silence length ffmpeg reports, seconds."),
+      paddingSeconds: z.number().min(0).optional().default(0.1).describe("Audio kept on each side of speech."),
+      minCutSeconds: z.number().min(0).optional().default(0.2).describe("Skip cuts shorter than this after padding."),
+      confirm: z.boolean().optional().default(false).describe("Apply the plan. Requires planToken from the dry run."),
+      planToken: z.string().optional(),
+    },
+    handler: async (p, ctx) => {
+      if (!findFfmpeg()) {
+        return { text: "ffmpeg required for silence cutting.", data: { ok: false, needFfmpeg: true } };
+      }
+      const det = detectSilenceInFile(p.mediaPath, { noiseDb: p.noiseDb, minDuration: p.minDuration });
+      const placed = await listPlacedClips(ctx, p.sequenceId);
+      const { matchedClips, mapped } = mapSourceRegionsToSequence(det.regions, placed, p.mediaPath);
+      const layout = placed
+        .filter((c) => (c.mediaFilePath ? true : false))
+        .map((c) => [c.trackType, c.trackIndex, c.startTicks, c.endTicks, c.inPointTicks, c.speed]);
+      let frameTicks: bigint | undefined;
+      try {
+        const st = (await ctx.relay.call("sequence.getSettings", p.sequenceId ? { sequenceId: p.sequenceId } : {})) as { timebaseTicksPerFrame?: string };
+        if (st?.timebaseTicksPerFrame) frameTicks = BigInt(st.timebaseTicksPerFrame);
+      } catch {
+        /* no frame snapping */
+      }
+      const plan = planSilenceCuts(mapped, placed, {
+        frameTicks,
+        paddingTicks: BigInt(secondsToTicks(p.paddingSeconds)),
+        minCutTicks: BigInt(secondsToTicks(p.minCutSeconds)),
+        tokenSeed: JSON.stringify([p.sequenceId ?? "active", p.mediaPath, p.noiseDb, p.minDuration, p.paddingSeconds, p.minCutSeconds, layout]),
+      });
+      const summary = plan.cuts
+        .slice()
+        .reverse()
+        .map((c) => ({
+          startSeconds: round3(ticksToSeconds(BigInt(c.startTicks))),
+          endSeconds: round3(ticksToSeconds(BigInt(c.endTicks))),
+          seconds: round3(ticksToSeconds(BigInt(c.durationTicks))),
+          trackType: c.trackType,
+          trackIndex: c.trackIndex,
+        }));
+      const totalSec = round3(ticksToSeconds(BigInt(plan.totalRemovedTicks)));
+      if (matchedClips === 0) {
+        return {
+          text: "The media file isn't in the sequence (no clip uses this path); nothing to cut.",
+          data: { ok: false, regions: det.regions, matchedClips },
+        };
+      }
+      if (!p.confirm) {
+        return {
+          text: `Silence cut PLAN (nothing changed): ${plan.cuts.length} range(s), ${totalSec}s removed in total. To apply, call again with the same settings plus confirm: true and planToken "${plan.token}".`,
+          data: { dryRun: true, planToken: plan.token, cuts: summary, totalSecondsRemoved: totalSec, skipped: plan.skipped, matchedClips, regions: det.regions },
+        };
+      }
+      if (!p.planToken || p.planToken !== plan.token) {
+        return {
+          text: `Refusing to cut: ${p.planToken ? "planToken does not match the current plan (wrong token, or the timeline/settings changed since the dry run)" : "planToken missing"}. Nothing was changed. Run the dry run again (same settings, no confirm), review it, then confirm with the token it returns.`,
+          data: { ok: false, refused: true, cuts: summary, totalSecondsRemoved: totalSec },
+        };
+      }
+
+      type Listed = { clipIndex: number; startTicks?: string; endTicks?: string };
+      const list = async (c: CutRange) =>
+        ((await ctx.relay.call("clip.list", { sequenceId: p.sequenceId, trackType: c.trackType, trackIndex: c.trackIndex })) as Listed[]) ?? [];
+      const results: Array<Record<string, unknown>> = [];
+      for (const c of plan.cuts) {
+        const a = BigInt(c.startTicks);
+        const b = BigInt(c.endTicks);
+        const ref = { sequenceId: p.sequenceId, trackType: c.trackType, trackIndex: c.trackIndex };
+        try {
+          let items = await list(c);
+          let host = items.find((i) => BigInt(i.startTicks ?? "-1") <= a && BigInt(i.endTicks ?? "-1") >= b);
+          if (!host) throw new Error("no clip covers this range any more");
+          if (b < BigInt(host.endTicks as string)) {
+            await ctx.relay.call("clip.split", { ...ref, clipIndex: host.clipIndex, atTicks: String(b) });
+            items = await list(c);
+          }
+          host = items.find((i) => BigInt(i.startTicks ?? "-1") <= a && BigInt(i.endTicks ?? "-1") >= b);
+          if (host && a > BigInt(host.startTicks as string)) {
+            await ctx.relay.call("clip.split", { ...ref, clipIndex: host.clipIndex, atTicks: String(a) });
+            items = await list(c);
+          }
+          const piece = items.find((i) => BigInt(i.startTicks ?? "-1") === a && BigInt(i.endTicks ?? "-1") === b);
+          if (!piece) throw new Error("could not isolate the range after splitting");
+          await ctx.relay.call("clip.rippleDelete", { ...ref, clipIndex: piece.clipIndex });
+          results.push({ ok: true, startSeconds: round3(ticksToSeconds(a)), endSeconds: round3(ticksToSeconds(b)) });
+        } catch (e) {
+          results.push({ ok: false, startSeconds: round3(ticksToSeconds(a)), endSeconds: round3(ticksToSeconds(b)), error: e instanceof Error ? e.message : String(e) });
+          break; // stop on first failure: later (earlier-in-time) ranges are still valid, the user can re-plan
+        }
+      }
+      const done = results.filter((r) => r.ok).length;
+      const removed = round3(
+        results.filter((r) => r.ok).reduce((t, r) => t + (Number(r.endSeconds) - Number(r.startSeconds)), 0),
+      );
+      return {
+        text: `Silence cut applied: ${done}/${plan.cuts.length} range(s) ripple-deleted, ~${removed}s removed.${done < plan.cuts.length ? " Stopped at the first failure; run the dry run again for the rest." : ""} Undo with Edit > Undo (about 3 steps per cut).`,
+        data: { applied: true, planToken: plan.token, results, totalSecondsRemoved: removed, plannedSeconds: totalSec },
+      };
+    },
+  }),
+
+  defineTool({
     name: "workflow_add_captions_from_audio",
     title: "Captions from audio (STT pipeline)",
     description:
@@ -1190,3 +1300,7 @@ export const workflowTools = [
     },
   }),
 ];
+
+function round3(n: number): number {
+  return Math.round(n * 1000) / 1000;
+}
