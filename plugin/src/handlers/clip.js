@@ -496,7 +496,17 @@ module.exports = {
     const { item } = await getClip(sequence, trackType, trackIndex, clipIndex);
     try {
       const editor = await getEditor(sequence);
-      const cut = BigInt(atTicks);
+      // Premiere places clip edges on frame boundaries. Splitting off-frame
+      // made the clone land a few ticks away from where we look for it
+      // (live: "could not find the clone"), leaving a half-done split. Snap
+      // the cut to the nearest sequence frame first.
+      let cut = BigInt(atTicks);
+      try {
+        const tpf = BigInt(String(await sequence.getTimebase()));
+        if (tpf > 0n) cut = ((cut + tpf / 2n) / tpf) * tpf;
+      } catch {
+        /* keep the raw time */
+      }
       const start = BigInt((await item.getStartTime()).ticks);
       const end = BigInt((await item.getEndTime()).ticks);
       if (cut <= start || cut >= end) {
@@ -510,7 +520,7 @@ module.exports = {
       const targets = [{ item, trackType, trackIndex }, ...partners];
       for (const ref of targets) requireUnitSpeed(await itemTimes(ref.item), "clip_split");
       for (const ref of targets) await splitOne(project, sequence, editor, ref, cut);
-      return { split: true, atTicks, via: "trim+clone", linkedSplit: partners.length };
+      return { split: true, atTicks: String(cut), requestedTicks: String(atTicks), via: "trim+clone", linkedSplit: partners.length };
     } catch (err) {
       throw apiError("clip.split", err);
     }
