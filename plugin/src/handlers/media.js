@@ -34,12 +34,16 @@ async function clipInfo(clip) {
       return undefined;
     }
   };
-  // Duration/resolution/frame rate were never confirmed reachable on
-  // ClipProjectItem (see file header). These extra fields are opportunistic,
-  // zero-risk probes (safe() swallows "not a function" like everything
-  // else here) in case a build/version exposes any of them — no worse than
-  // the current "always undefined" if none exist.
-  const ticks = await safe(() => clip.getDuration && clip.getDuration());
+  // Live-verified on Premiere 26.5.2: duration lives on the Media object
+  // (ClipProjectItem.getMedia().getDuration()), frame rate and pixel aspect
+  // ratio on FootageInterpretation. ClipProjectItem has no frame-size getter
+  // in the UXP API, so width/height are not reported.
+  const media = await safe(() => clip.getMedia());
+  const dur = media ? await safe(() => media.getDuration()) : undefined;
+  const interp = await safe(() => clip.getFootageInterpretation());
+  const frameRate = interp ? await safe(() => interp.getFrameRate()) : undefined;
+  const par = interp ? await safe(() => interp.getPixelAspectRatio()) : undefined;
+  const contentType = await safe(() => clip.getContentType());
   return {
     name: clip.name,
     mediaFilePath: await safe(() => clip.getMediaFilePath()),
@@ -51,11 +55,12 @@ async function clipInfo(clip) {
     isMergedClip: await safe(() => clip.isMergedClip()),
     isSequence: await safe(() => clip.isSequence()),
     canChangeMediaPath: await safe(() => clip.canChangeMediaPath()),
-    durationTicks: ticks && ticks.ticks !== undefined ? String(ticks.ticks) : await safe(() => clip.duration),
-    frameSize: await safe(() => clip.getFrameSize && clip.getFrameSize()),
-    width: await safe(() => clip.width),
-    height: await safe(() => clip.height),
-    frameRate: await safe(() => clip.getFrameRate && clip.getFrameRate()),
+    durationTicks: dur && dur.ticks !== undefined ? String(dur.ticks) : undefined,
+    durationSeconds: dur && dur.seconds !== undefined ? Number(dur.seconds) : undefined,
+    // 0 for audio-only / stills, where Premiere has no frame rate.
+    frameRate: typeof frameRate === "number" && frameRate > 0 ? frameRate : undefined,
+    pixelAspectRatio: typeof par === "number" ? par : undefined,
+    contentType,
   };
 }
 

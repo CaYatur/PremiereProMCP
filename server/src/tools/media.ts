@@ -11,7 +11,7 @@ export const mediaTools = [
     name: "media_get_info",
     title: "Get media / project-item info",
     description:
-      "Read file path, offline state, proxy status, multicam/merged/sequence flags for a project item (by projectItemId from project_list_items).",
+      "Read file path, offline state, proxy status, multicam/merged/sequence flags, duration (durationTicks/durationSeconds), frame rate and pixel aspect ratio for a project item (by projectItemId from project_list_items). Frame size (width/height) is not exposed by Premiere's UXP API.",
     inputSchema: { projectItemId: z.string() },
     handler: async (p, ctx) => {
       const data = await ctx.relay.call("media.getInfo", p);
@@ -134,7 +134,7 @@ export const mediaTools = [
   defineTool({
     name: "media_analyze_file_info",
     title: "Analyze media file info",
-    description: "Alias of media_get_info — path, offline, proxy, multicam flags for a project item.",
+    description: "Alias of media_get_info — path, offline, proxy, multicam flags, duration, frame rate and pixel aspect ratio for a project item.",
     inputSchema: { projectItemId: z.string() },
     handler: async (p, ctx) => {
       const data = await ctx.relay.call("media.getInfo", p);
