@@ -18,6 +18,17 @@ All notable changes to PPMCP are documented here. Format loosely follows
   longer mentions a nonexistent `applyCuts` option.
 - `clip.list` / `clip.getProperties` now also return the clip's
   `mediaFilePath`.
+- Markers added by `workflow_clean_silence`, `analyze_silence`, the other
+  analyze tools and `markers_add_many` lost their comment: the tools sent
+  `comments` while the plugin reads `comment`. Silence markers now also get
+  the silence length as their duration.
+- `media_get_info` / `media_analyze_file_info` now return duration
+  (`durationTicks`, `durationSeconds`), frame rate and pixel aspect ratio.
+- `shape_set_size` sets the exact width and height (non-uniform Motion scale)
+  instead of averaging them into one uniform scale.
+- `export_frame`, `sequence_export_still` and `sequence_export_frame` now
+  export the real sequence frame with Premiere's `Exporter.exportSequenceFrame`
+  instead of falling back to a screenshot of the Premiere window.
 
 ## [1.2.0] — 2026-10-09
 
