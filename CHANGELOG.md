@@ -6,6 +6,8 @@ All notable changes to PPMCP are documented here. Format loosely follows
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-10-14
+
 ### Added
 
 - `transcript_get`: read Premiere's own Speech-to-Text transcript of a clip
@@ -350,6 +352,7 @@ pass, export, and screenshots. Atomic multi-step edits via
 `Project.executeTransaction()`, rate limiting, and file checkpoints.
 Pure-PowerShell Windows Setup with bundled portable Node.
 
+[1.3.0]: https://github.com/CaYatur/PremiereProMCP/releases/tag/v1.3.0
 [1.2.0]: https://github.com/CaYatur/PremiereProMCP/releases/tag/v1.2.0
 [1.1.1]: https://github.com/CaYatur/PremiereProMCP/releases/tag/v1.1.1
 [1.1.0]: https://github.com/CaYatur/PremiereProMCP/releases/tag/v1.1.0
