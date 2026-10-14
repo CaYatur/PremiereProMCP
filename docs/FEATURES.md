@@ -74,7 +74,8 @@
 >    `createSetOutPointAction(t)` and commits both in **one compound
 >    transaction** (no invalid in>out intermediate state), keeping the
 >    editor/direct paths as fallbacks. Shipped in 1.0.1, confirmed in 1.0.2.
-> 5. **`app_get_version`** — **fix applied 1.0.2, pending live re-test.**
+> 5. **`app_get_version`** - **fixed in 1.0.2, live-verified 2026-10-14** on Premiere 26.5.2: returns
+>    `{ version: "26.5.2", host: "premierepro", uxpVersion: "uxp-9.3.0-local" }`.
 >    Returned `null` because it read `version` off the `Application` *class*,
 >    but `version` is an *instance* property (`Promise<string>`, 25.6+). Now
 >    reads `require("uxp").host.version` (the build-agnostic UXP host path);
@@ -84,23 +85,20 @@
 >    duration, resolution, or frame rate; `ClipProjectItem` only exposes
 >    path/proxy/offline-style fields via UXP (see `plugin/src/handlers/
 >    media.js`'s own header comment — this was researched, not
->    overlooked). **Hardened:** now opportunistically probes `getDuration`,
->    `getFrameSize`, `width`/`height`, `getFrameRate`, feature-detected —
->    returns them if this build happens to expose any, `undefined`
->    otherwise (no worse than before). Workaround either way: shell out to
->    `ffprobe` on the source file path.
+>    overlooked). **Fixed and live-verified 2026-10-14 (26.5.2):** duration
+>    comes from `ClipProjectItem.getMedia().getDuration()` and frame rate /
+>    pixel aspect ratio from `getFootageInterpretation()` (3 s 25 fps test
+>    clip -> `durationSeconds: 3`, `frameRate: 25`). Width/height are still
+>    not available - `ClipProjectItem` has no frame-size getter; use
+>    `ffprobe` on the source file path for resolution.
 >
-> **Lower-confidence, not re-verified this round:** `text_set_content`
-> (editing an *existing* graphic's text — only reliable with the optional
-> CEP Text Bridge connected to an AE-authored MOGRT, otherwise the pure-UXP
-> path throws `"Illegal Parameter type"` on the MOGRT `Text` property; use
-> `text_write`/`text_add` instead for placing new text, which always
-> succeeds via a guaranteed PNG fallback) and `shape_set_size` (the bundled
-> shape MOGRT never exposed a real `Size` master property, so it falls back
-> to a single uniform Motion Scale % approximation, not independent
-> width/height) — both are carried over from an earlier code-level probe.
-> Given `clip_insert` turned out better than that same style of analysis
-> suggested, treat these two as "worth a fresh live check," not settled.
+> **Re-checked live 2026-10-14 (Premiere 26.5.2):** `text_set_content` on
+> pure UXP is still a platform gap - `createKeyframe()` rejects string values
+> (`"Illegal Parameter type"`) on both MOGRT `Text` and Simple Text; it only
+> works through the CEP Text Bridge with an AE-authored MOGRT.
+> `shape_set_size` is **fixed**: it now sets exact width/height via
+> non-uniform Motion scale (verified by measuring the shape in an exported
+> frame).
 >
 > **Also found and fixed: a fade/keyframe ordering footgun, not a tool
 > bug.** `workflow_audio_fade`/`workflow_fade_clip` read the clip's
@@ -514,16 +512,17 @@ editable-MOGRT path, no PNG fallback — fails if CEP/UXP both fail),
 `text_set_content` ❔ (edits an *existing* graphic's text — only reliable
 with the optional CEP Text Bridge connected to an AE-authored MOGRT; the
 pure-UXP fallback is confirmed broken — `ComponentParam.createKeyframe()`
-throws `"Illegal Parameter type"` for the MOGRT `Text` master property. Use
+throws `"Illegal Parameter type"` for the MOGRT `Text` master property;
+re-checked live 2026-10-14 on 26.5.2, unchanged. Use
 `text_write` instead if you don't need to re-edit existing text),
 `text_get_content` (same CEP-first/UXP-fallback split as above, read-only),
 `text_set_content_legacy`, `text_get_content_legacy` (CEP-only, no UXP
 fallback — require the Text Bridge panel open), `text_set_position`,
 `shape_add` ✅ (live-confirmed: adds a real on-screen shape, position and
 fill color round-tripped through `PointF`/`Color`), `shape_set_position` ✅,
-`shape_set_size` ❔ (the bundled shape MOGRT never exposed a real `Size`
-master property — this tool *always* falls back to a single uniform Motion
-Scale % approximation, not independent width/height in pixels),
+`shape_set_size` ✅ (fixed and live-verified 2026-10-14: turns off Motion uniform scale and sets
+Scale Width = w/400, Scale = h/200 for the 400x200 Basic Shape rectangle;
+a 600x100 request measured 604x104 px in an exported frame, anti-aliased),
 `shape_set_fill_color` ✅, `title_list_params`,
 `caption_generate_auto` ❔, `caption_import_srt` ❔ (downgraded from 🔧 — depends on the now-broken `Transcript` surface), `caption_export_srt` ❔ (same),
 `caption_edit_segment_text` ❔, `caption_edit_segment_timing` ❔,
@@ -531,7 +530,7 @@ Scale % approximation, not independent width/height in pixels),
 `caption_create_track` ❔
 
 ### J. Markers & Metadata — `marker_*`, `metadata_*` (12)
-`marker_add` (added 7 markers with no error in a real session via the same multi-variant retry as `clip_insert` — unconfirmed whether that went through the native path or the virtual-marker Sequence-Properties fallback, since both return the same success shape; if it's the fallback, markers won't appear in Premiere's own marker UI), `marker_remove`, `marker_list` ✅, `marker_set_color`,
+`marker_add` (live-verified 2026-10-14 on 26.5.2 via the **native** path - visible in Premiere's marker UI; name, comment and duration round-trip through `marker_list`. Server tools that sent `comments` instead of `comment` are fixed), `marker_remove`, `marker_list` ✅, `marker_set_color`,
 `marker_set_type`, `marker_set_duration`, `marker_go_to`,
 `metadata_get_clip`, `metadata_set_clip`, `metadata_get_xmp`,
 `metadata_set_xmp`, `metadata_batch_tag`
@@ -552,19 +551,16 @@ catalog omitted `media_get_info` entirely and listed `proxy_create`/
 `media_set_ingest_settings`, none of which match what shipped.
 `ClipProjectItem.canProxy()/getProxyPath()/hasProxy()/attachProxy()` are
 confirmed. Real list, real tags:
-`media_get_info` ❔ (never returned duration/resolution/frame rate — only
-path/proxy/offline-style fields; hardened 2026-07-11 with opportunistic,
-feature-detected probes for `getDuration`/`getFrameSize`/`width`/`height`/
-`getFrameRate`, unverified whether any exist on this build), `proxy_attach`,
+`media_get_info` ✅ (fixed and live-verified 2026-10-14: duration via `getMedia().getDuration()`, frame rate / PAR via `getFootageInterpretation()`; no width/height - no UXP getter), `proxy_attach`,
 `media_go_offline`, `media_relink`, `media_refresh`, `media_rename`,
 `media_find_by_path`, `media_go_online`,
-`media_analyze_file_info` ❔ (same gap/hardening as `media_get_info`),
+`media_analyze_file_info` ✅ (alias of `media_get_info`, same fix),
 `media_browser_search`
 
 ### M. Export & Rendering — `export_*`, `render_*` (12)
 `export_with_preset`, `export_custom_settings`,
 `export_queue_to_media_encoder`, `export_get_queue_status`,
-`export_frame_as_image`, `export_batch_sequences`,
+`export_frame_as_image` (live-verified 2026-10-14: pure sequence frame via `Exporter.exportSequenceFrame`, same as `export_frame` / `sequence_export_still`), `export_batch_sequences`,
 `render_preview_in_out`, `render_replace_with_render_file`,
 `export_generate_edl`, `export_generate_xml`, `export_get_presets_list`,
 `export_cancel`
@@ -597,7 +593,7 @@ a thin API wrapper. Treat these as real engineering work, not a quick win.
 `playhead_go_to_marker`, `playhead_go_to_next_edit`,
 `playhead_go_to_previous_edit`, `selection_get_current`,
 `selection_set`, `selection_clear`, `workspace_get_active_panel`,
-`workspace_set_layout`, `app_get_version` ❔ (was `null` — read `version` off the `Application` class, but it's an *instance* property; fix applied 1.0.2, pending re-test — now reads `require("uxp").host.version`, returns `{ version, host, uxpVersion }`), `app_get_connection_status`
+`workspace_set_layout`, `app_get_version` ✅ (was `null`; fixed in 1.0.2 by reading `require("uxp").host.version`; live-verified 2026-10-14 on 26.5.2, returns `{ version, host, uxpVersion }`), `app_get_connection_status`
 
 ### Q. Dedicated common effect/transition shortcuts — `effect_apply_*`, `audio_apply_*`, `transition_add_*` (41)
 Added 2026-07-10. Rather than pad the catalog with speculative or duplicate

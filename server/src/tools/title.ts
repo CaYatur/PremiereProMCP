@@ -842,7 +842,7 @@ export const titleTools = [
     name: "shape_set_size",
     title: "Resize a shape",
     description:
-      "Set the width/height of a shape graphic in pixels. Prefers a Size master property; if missing, approximates via Motion Scale (% of design size 400x200).",
+      "Set the width/height of a shape graphic in pixels. Prefers a Size master property; on the bundled Basic Shape template (400x200 design size) it sets exact width/height via non-uniform Motion scale (Scale Width = w/400, Scale = h/200).",
     inputSchema: { ...clipRef, width: z.number().positive(), height: z.number().positive() },
     handler: async (p, ctx) => {
       try {

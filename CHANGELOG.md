@@ -6,6 +6,30 @@ All notable changes to PPMCP are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `workflow_clean_silence` placed its markers at the silence's time inside the
+  media file, not on the timeline, so they were wrong for any clip that
+  doesn't start at 0:00 untrimmed. Markers are now placed for every instance
+  of the file in the sequence (clip start + offset from its in point, scaled
+  by speed, trimmed to the visible range). If the file isn't in the sequence,
+  no markers are added and the regions are returned with a note; the new
+  optional `sequenceOffsetSeconds` places them manually. The description no
+  longer mentions a nonexistent `applyCuts` option.
+- `clip.list` / `clip.getProperties` now also return the clip's
+  `mediaFilePath`.
+- Markers added by `workflow_clean_silence`, `analyze_silence`, the other
+  analyze tools and `markers_add_many` lost their comment: the tools sent
+  `comments` while the plugin reads `comment`. Silence markers now also get
+  the silence length as their duration.
+- `media_get_info` / `media_analyze_file_info` now return duration
+  (`durationTicks`, `durationSeconds`), frame rate and pixel aspect ratio.
+- `shape_set_size` sets the exact width and height (non-uniform Motion scale)
+  instead of averaging them into one uniform scale.
+- `export_frame`, `sequence_export_still` and `sequence_export_frame` now
+  export the real sequence frame with Premiere's `Exporter.exportSequenceFrame`
+  instead of falling back to a screenshot of the Premiere window.
+
 ## [1.2.0] — 2026-10-09
 
 ### Added

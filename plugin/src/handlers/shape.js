@@ -20,6 +20,27 @@ const {
 const DEFAULT_DESIGN_W = 400;
 const DEFAULT_DESIGN_H = 200;
 
+// Motion's params on 26.x: Position, Scale, Scale Width, <uniform checkbox>,
+// Rotation, ... The uniform-scale checkbox has a blank display name (" "),
+// so locate it as the param right after "Scale Width".
+async function findMotionParams(item) {
+  const { components } = await getComponents(item);
+  for (const comp of components) {
+    const name = await getComponentDisplayName(comp);
+    if (name !== "Motion") continue;
+    const params = await getComponentParams(comp);
+    const idx = params.findIndex((p) => p.displayName === "Scale Width");
+    const uniform =
+      params.find((p) => p.displayName === "Uniform Scale") || (idx >= 0 ? params[idx + 1] : undefined);
+    return {
+      scale: params.find((p) => p.displayName === "Scale"),
+      scaleWidth: idx >= 0 ? params[idx] : undefined,
+      uniform,
+    };
+  }
+  return undefined;
+}
+
 async function getShapeItem(sequenceId, trackIndex, clipIndex) {
   const project = await getActiveProject();
   const sequence = await getSequence(project, sequenceId);
@@ -93,6 +114,30 @@ module.exports = {
       errors.push(`Size: ${e.message}`);
     }
 
+    // 2) Exact width/height via non-uniform Motion scale. The template's
+    //    rectangle is 400x200 px in a 1920x1080 comp (measured from the
+    //    MOGRT thumbnail), and Motion scales around the frame centre, so
+    //    Scale Width = w/400 and Scale (height, once uniform is off) = h/200.
+    //    Live-verified on Premiere 26.5.2.
+    try {
+      const motion = await findMotionParams(item);
+      if (motion && motion.scale && motion.scaleWidth && motion.uniform) {
+        await setParamValue(project, motion.uniform, false, "PPMCP shape_set_size (uniform off)");
+        await setParamValue(project, motion.scale, (h / DEFAULT_DESIGN_H) * 100, "PPMCP shape_set_size (height)");
+        await setParamValue(project, motion.scaleWidth, (w / DEFAULT_DESIGN_W) * 100, "PPMCP shape_set_size (width)");
+        return {
+          width: w,
+          height: h,
+          via: "Motion non-uniform scale",
+          scaleHeightPercent: (h / DEFAULT_DESIGN_H) * 100,
+          scaleWidthPercent: (w / DEFAULT_DESIGN_W) * 100,
+        };
+      }
+      errors.push("Motion Scale / Scale Width / Uniform Scale not all found");
+    } catch (e) {
+      errors.push(`Motion non-uniform: ${e.message}`);
+    }
+
     // 2) Uniform Scale (%) so visual size ≈ design size * scale/100
     //    Use average of w/h relative to default design size.
     try {
@@ -106,6 +151,7 @@ module.exports = {
           via: "Scale",
           scalePercent: scalePct,
           note: "Size master property missing on template; approximated via Motion/graphic Scale.",
+          attempts: errors,
         };
       }
       errors.push("Scale param not found");

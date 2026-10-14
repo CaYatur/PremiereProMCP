@@ -38,13 +38,23 @@ async function clipSummary(item, index) {
   const start = item.getStartTime ? await item.getStartTime() : undefined;
   const end = item.getEndTime ? await item.getEndTime() : undefined;
   let projectItemId;
+  let mediaFilePath;
   try {
     if (item.getProjectItem) {
       const pi = await item.getProjectItem();
       projectItemId = pi && pi.getId ? await pi.getId() : undefined;
+      // Source file of the clip, so server-side tools can map source-media
+      // time (e.g. ffmpeg analysis) onto the sequence. Opportunistic: stays
+      // undefined for sequences/graphics or if the cast is unavailable.
+      if (pi && ppro.ClipProjectItem && typeof ppro.ClipProjectItem.cast === "function") {
+        const clipItem = ppro.ClipProjectItem.cast(pi);
+        if (clipItem && clipItem.getMediaFilePath) {
+          mediaFilePath = (await safe(() => clipItem.getMediaFilePath())) || undefined;
+        }
+      }
     }
   } catch {
-    projectItemId = undefined;
+    projectItemId = projectItemId ?? undefined;
   }
   return {
     clipIndex: index,
@@ -60,6 +70,7 @@ async function clipSummary(item, index) {
     selected: item.getIsSelected ? await safe(() => item.getIsSelected()) : undefined,
     trackIndex: item.getTrackIndex ? await safe(() => item.getTrackIndex()) : undefined,
     projectItemId,
+    mediaFilePath,
     mediaType: item.mediaType,
   };
 }

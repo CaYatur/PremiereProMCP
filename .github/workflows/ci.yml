@@ -48,6 +48,11 @@ jobs:
       - name: UXP action lock-scope check
         run: node scripts/check-action-lock-scope.mjs
 
+      # source-time → sequence-time marker mapping (workflow_clean_silence);
+      # the ffmpeg e2e half is skipped where ffmpeg isn't installed.
+      - name: Silence marker mapping tests
+        run: node scripts/test-silence-mapping.mjs
+
       - name: Tool profile check
         run: node scripts/check-profiles.mjs
 

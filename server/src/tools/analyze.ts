@@ -373,7 +373,8 @@ export const analyzeTools = [
               sequenceId: p.sequenceId,
               atTicks: r.startTicks,
               name: `Silence ${r.startSeconds.toFixed(1)}s`,
-              comments: `dur ${r.durationSeconds.toFixed(2)}s`,
+              comment: `dur ${r.durationSeconds.toFixed(2)}s`,
+              durationTicks: (BigInt(r.endTicks) - BigInt(r.startTicks)).toString(),
             });
             markers.push({ ok: true, data });
           } catch (e) {
@@ -418,7 +419,7 @@ export const analyzeTools = [
               sequenceId: p.sequenceId,
               atTicks: e.ticks,
               name: e.kind,
-              comments: `str=${e.strength}`,
+              comment: `str=${e.strength}`,
             });
             markers.push({ ok: true, data });
           } catch (err) {
@@ -506,7 +507,7 @@ export const analyzeTools = [
               sequenceId: p.sequenceId,
               atTicks: s.ticks,
               name: s.reason,
-              comments: s.detail,
+              comment: s.detail,
             });
             markers.push({ ok: true, data });
           } catch (e) {
@@ -626,7 +627,7 @@ export const analyzeTools = [
               sequenceId: p.sequenceId,
               atTicks,
               name: String(seg.text).slice(0, 40),
-              comments: "caption",
+              comment: "caption",
             });
           } catch (e) {
             row.markerError = e instanceof Error ? e.message : String(e);
@@ -704,7 +705,7 @@ export const analyzeTools = [
               sequenceId: p.sequenceId,
               atTicks: seg.startTicks,
               name: seg.text.slice(0, 40),
-              comments: "auto-caption",
+              comment: "auto-caption",
             });
           } catch (e) {
             row.markerError = e instanceof Error ? e.message : String(e);
