@@ -4,7 +4,7 @@
  * 2) CopyFromScreen full panel (no crop by default)
  * 3) Optional ffmpeg extract from short media
  */
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 
 function which(cmd: string): string | null {
   try {
-    const out = execSync(`where.exe ${cmd}`, { encoding: "utf8", windowsHide: true });
+    const out = execFileSync("where.exe", [cmd], { encoding: "utf8", windowsHide: true });
     const line = out
       .split(/\r?\n/)
       .map((s) => s.trim())

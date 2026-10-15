@@ -378,7 +378,7 @@ $path.AddArc($x+$w-$r*2, $y+$h-$r*2, $r*2, $r*2, 0, 90)
 $path.AddArc($x, $y+$h-$r*2, $r*2, $r*2, 90, 90)
 $path.CloseFigure()
 $g.FillPath($brush, $path)
-$bmp.Save('${file.replace(/\\/g, "\\\\")}', [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp.Save('${file.replace(/'/g, "''")}', [System.Drawing.Imaging.ImageFormat]::Png)
 $g.Dispose(); $bmp.Dispose(); $brush.Dispose(); $path.Dispose()
 `;
   const scriptPath = path.join(os.tmpdir(), `ppmcp-plate-${Date.now()}.ps1`);
@@ -734,7 +734,7 @@ $glow.Dispose(); $red.Dispose(); $core.Dispose()
 `
     : ""
 }
-$bmp.Save('${file.replace(/\\/g, "\\\\")}', [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp.Save('${file.replace(/'/g, "''")}', [System.Drawing.Imaging.ImageFormat]::Png)
 $g.Dispose(); $bmp.Dispose(); $font.Dispose(); $brush.Dispose(); $shadow.Dispose()
 `;
   const scriptPath = path.join(os.tmpdir(), `ppmcp-render-text-${Date.now()}.ps1`);
@@ -785,7 +785,7 @@ $g.FillEllipse($red, ${cx}-${r}, ${cy}-${r}, ${r}*2, ${r}*2)
 # bright core
 $core = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 255, 80, 80))
 $g.FillEllipse($core, ${cx}-[int](${r}*0.45), ${cy}-[int](${r}*0.45), [int](${r}*0.9), [int](${r}*0.9))
-$bmp.Save('${out}', [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp.Save('${out.replace(/'/g, "''")}', [System.Drawing.Imaging.ImageFormat]::Png)
 $g.Dispose(); $bmp.Dispose(); $glow.Dispose(); $red.Dispose(); $core.Dispose()
 `;
   const scriptPath = path.join(os.tmpdir(), `ppmcp-recdot-${Date.now()}.ps1`);
