@@ -11,11 +11,20 @@ const BUILTIN = {
 
 // AE-authored lower thirds (if installed with Premiere) — ExtendScript path
 // was proven to edit their Title/Subtitle; UXP may expose different params.
+function userAppDataRoaming() {
+  try {
+    return require("os").homedir() + "\\AppData\\Roaming";
+  } catch {
+    return null;
+  }
+}
+
 const AE_TEXT_CANDIDATES = [
   "C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026\\Essential Graphics\\[AE] Sports Package\\Sports Lower Third Center.mogrt",
   "C:\\Program Files\\Adobe\\Adobe Premiere Pro 2025\\Essential Graphics\\[AE] Sports Package\\Sports Lower Third Center.mogrt",
-  "C:\\Users\\cagan\\AppData\\Roaming\\Adobe\\Common\\Motion Graphics Templates\\[AE] Sports Package\\Sports Lower Third Center.mogrt",
-];
+  userAppDataRoaming() &&
+    userAppDataRoaming() + "\\Adobe\\Common\\Motion Graphics Templates\\[AE] Sports Package\\Sports Lower Third Center.mogrt",
+].filter(Boolean);
 
 let pluginFolderCache;
 

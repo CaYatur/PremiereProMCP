@@ -280,7 +280,7 @@ without error at the AE-authoring stage** — the earlier concern was about
 reading/writing color via classic ExtendScript's `getValue()` on an
 *existing* Capsule component (still untested for our own shape), not
 about whether AE can expose a color master property at all (it can).
-Both `.mogrt` files are saved at `C:\Users\cagan\AppData\Roaming\Adobe\
+Both `.mogrt` files are saved at `%APPDATA%\Adobe\
 Common\Motion Graphics Templates\`, ready to bundle. Stopping live probes
 here (context budget) — reading back the exposed color's actual value via
 Premiere is the one remaining unproven step, deferred to Phase 1/3.

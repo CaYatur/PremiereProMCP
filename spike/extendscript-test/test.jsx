@@ -114,7 +114,7 @@ if (targetSeq) {
   // Import an AE-authored MOGRT into the SAME sequence and inspect it too.
   var AE_MOGRT_CANDIDATES = [
     'C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026\\Essential Graphics\\[AE] Sports Package\\Sports Lower Third Center.mogrt',
-    'C:\\Users\\cagan\\AppData\\Roaming\\Adobe\\Common\\Motion Graphics Templates\\[AE] Sports Package\\Sports Lower Third Center.mogrt',
+    Folder.userData.fsName + '\\Adobe\\Common\\Motion Graphics Templates\\[AE] Sports Package\\Sports Lower Third Center.mogrt',
   ];
   var imported = null, usedPath = null, importErrors = {};
   for (var m = 0; m < AE_MOGRT_CANDIDATES.length; m++) {

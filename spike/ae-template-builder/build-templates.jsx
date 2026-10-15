@@ -45,7 +45,7 @@ function log(x) {
 }
 
 var results = {};
-var OUT_DIR = 'C:\\Users\\cagan\\AppData\\Roaming\\Adobe\\Common\\Motion Graphics Templates\\';
+var OUT_DIR = Folder.userData.fsName + '\\Adobe\\Common\\Motion Graphics Templates\\';
 
 function ensureProject() {
   if (!app.project) {
