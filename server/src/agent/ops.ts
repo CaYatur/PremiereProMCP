@@ -5,6 +5,7 @@
 import fs from "node:fs";
 import type { ToolContext } from "../toolDefinition.js";
 import { formatRelayError } from "../toolDefinition.js";
+import { callExportSequence } from "../exportPreset.js";
 // text paths go through textEngine (UXP → hybrid → CEP → PNG)
 
 const TICKS_PER_SECOND = 254016000000n;
@@ -836,11 +837,11 @@ async function runOpInner(ctx: ToolContext, step: EditOp): Promise<OpResult> {
       if (!outputPath) {
         return { op, ok: false, error: "outputPath required", recovery: "Pass absolute export path" };
       }
-      const data = await ctx.relay.call("export.sequence", {
+      const data = await callExportSequence(ctx, {
         sequenceId,
         outputPath,
-        presetPath: step.presetPath,
-        exportType: step.exportType || "immediately",
+        presetPath: step.presetPath as string | undefined,
+        exportType: (step.exportType as string | undefined) || "immediately",
       });
       return { op, ok: true, data };
     }

@@ -2,7 +2,7 @@
 // the model widen its own tool surface when it decides it needs to.
 //
 // The server registers a profile (see server/src/toolProfiles.ts), not all
-// ~277 tools. These four keep everything else within reach:
+// ~283 tools. These four keep everything else within reach:
 //
 //   tool_search("fade")       → candidate names + one-line descriptions
 //   tool_schema("clip_trim")  → that tool's parameters

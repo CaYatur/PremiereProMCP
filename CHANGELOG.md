@@ -6,6 +6,41 @@ All notable changes to PPMCP are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Security
+
+- The bridge (`ws://127.0.0.1:8265`) now authenticates every client. A
+  per-install random token is created automatically on first start at
+  `%APPDATA%\PPMCP\relay-token` and copied into the installed plugin folder;
+  the MCP server, the UXP panel and the optional CEP text bridge read it on
+  every (re)connect. No setup step, prompt or config change — existing
+  installs pick it up after updating.
+- WebSocket upgrades from web pages (`http(s)://` Origin) are refused with
+  403, so a browser tab can no longer drive Premiere through the bridge.
+  Node clients (no Origin) and the UXP/CEP panels are unaffected.
+- A `hello` with a missing or wrong token gets a clear `authError` and close
+  code 4401; it can no longer replace or drop the connected panel.
+- `maxPayload` (64 MB) on the relay socket; client `timeoutMs` clamped to
+  1 s–10 min.
+- `@modelcontextprotocol/sdk` ^1.32.1 and `npm audit fix` (fast-uri, hono):
+  `npm audit` is clean.
+- Release build verifies the portable Node.js zip against `SHASUMS256.txt`.
+
+### Fixed
+
+- PowerShell-rendered PNG paths now use single-quote escaping (`''`), so a
+  Windows user name containing `'` no longer breaks text plates.
+- `captureFrame` looks up `ffmpeg`/`magick` with `execFileSync` instead of a
+  shell string.
+- AE lower-third MOGRT lookup used a hardcoded developer path; it now uses the
+  current user's `%APPDATA%`.
+
+### Changed
+
+- Removed developer scratch scripts (`scripts/_*.mjs`) and personal paths in
+  demo scripts.
+- Docs: tool counts are 283 (full) / 112 (standard); Premiere Pro 26.0+ is
+  the stated minimum everywhere, matching the plugin manifest.
+
 ## [1.3.0] — 2026-10-14
 
 ### Added

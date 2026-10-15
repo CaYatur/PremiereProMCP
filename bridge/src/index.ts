@@ -16,9 +16,62 @@ import {
   DEFAULT_RELAY_PORT,
   DEFAULT_CALL_TIMEOUT_MS,
   routesToLegacyBridge,
+  RELAY_AUTH_CLOSE_CODE,
+  RELAY_MAX_PAYLOAD_BYTES,
+  MIN_CALL_TIMEOUT_MS,
+  MAX_CALL_TIMEOUT_MS,
+  loadOrCreateRelayToken,
+  mirrorTokenToPlugin,
+  PLUGIN_TOKEN_FILENAME,
 } from "@ppmcp/shared";
+import type { IncomingMessage } from "node:http";
+import { timingSafeEqual } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const PORT = Number(process.env.PPMCP_BRIDGE_PORT ?? DEFAULT_RELAY_PORT);
+
+/** Browsers always send an Origin header on WebSocket upgrades, and a web
+ * page cannot forge it. Node clients (MCP server) send none; UXP/CEP panels
+ * send none, "null", or a non-web scheme (uxp://, file://). We only reject
+ * real web origins (http/https), which is exactly the drive-by-website case. */
+export function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin || origin === "null") return true;
+  const o = origin.toLowerCase();
+  return !(o.startsWith("http://") || o.startsWith("https://"));
+}
+
+export function clampTimeout(v: unknown): number {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_CALL_TIMEOUT_MS;
+  return Math.min(Math.max(n, MIN_CALL_TIMEOUT_MS), MAX_CALL_TIMEOUT_MS);
+}
+
+function tokenMatches(expected: string, got: unknown): boolean {
+  if (typeof got !== "string") return false;
+  const a = Buffer.from(expected);
+  const b = Buffer.from(got);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** Put the token where the panel can read it (installed plugin folder and,
+ * for dev/UDT loads, the repo's plugin/ folder). Zero user steps. */
+function mirrorToken(token: string) {
+  mirrorTokenToPlugin(token);
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const repoPlugin = path.resolve(here, "../../plugin");
+    if (fs.existsSync(path.join(repoPlugin, "manifest.json"))) {
+      const f = path.join(repoPlugin, PLUGIN_TOKEN_FILENAME);
+      let cur = "";
+      try { cur = fs.readFileSync(f, "utf8").trim(); } catch { /* missing */ }
+      if (cur !== token) fs.writeFileSync(f, token + "\n", { mode: 0o600 });
+    }
+  } catch {
+    /* best effort */
+  }
+}
 
 interface PendingCall {
   originSocket: WebSocket;
@@ -34,9 +87,21 @@ class Relay {
   private legacyBridge: WebSocket | null = null;
   private pending = new Map<string, PendingCall>();
 
-  constructor(port: number) {
+  private readonly token: string;
+
+  constructor(port: number, token: string) {
+    this.token = token;
     // Loopback-only — never bind a non-local interface.
-    this.wss = new WebSocketServer({ host: "127.0.0.1", port });
+    this.wss = new WebSocketServer({
+      host: "127.0.0.1",
+      port,
+      maxPayload: RELAY_MAX_PAYLOAD_BYTES,
+      verifyClient: (info: { origin: string; req: IncomingMessage }, cb: (ok: boolean, code?: number, msg?: string) => void) => {
+        if (isAllowedOrigin(info.origin)) return cb(true);
+        log(`rejected connection from web origin ${info.origin}`);
+        cb(false, 403, "Forbidden origin");
+      },
+    });
     this.wss.on("connection", (socket) => this.onConnection(socket));
     this.wss.on("listening", () => {
       log(`listening on ws://127.0.0.1:${port}`);
@@ -59,6 +124,22 @@ class Relay {
       }
 
       if (msg.type === "hello") {
+        if (!tokenMatches(this.token, msg.token)) {
+          // Never touch existing registrations (no panel hijack/drop).
+          log(`rejected hello (role ${String(msg.role)}): missing or invalid token`);
+          try {
+            socket.send(JSON.stringify({
+              type: "authError",
+              message: "PPMCP relay rejected the connection: missing or invalid relay token. Restart the PPMCP bridge (it re-shares the token automatically) or re-run Setup.",
+            }));
+          } catch { /* ignore */ }
+          socket.close(RELAY_AUTH_CLOSE_CODE, "invalid relay token");
+          return;
+        }
+        if (role) {
+          log(`ignoring repeated hello from ${role}`);
+          return;
+        }
         role = msg.role;
         this.registerClient(role, socket, msg.info);
         return;
@@ -168,15 +249,16 @@ class Relay {
       return;
     }
 
+    const timeoutMs = clampTimeout(msg.timeoutMs);
     const timeout = setTimeout(() => {
       this.pending.delete(msg.id);
       this.sendResult(fromSocket, {
         type: "result",
         id: msg.id,
         ok: false,
-        error: { code: "TIMEOUT", message: `No response for method "${msg.method}" within ${msg.timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS}ms.` },
+        error: { code: "TIMEOUT", message: `No response for method "${msg.method}" within ${timeoutMs}ms.` },
       });
-    }, msg.timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS);
+    }, timeoutMs);
 
     this.pending.set(msg.id, { originSocket: fromSocket, timeout, targetRole });
     target.send(JSON.stringify(msg));
@@ -225,7 +307,11 @@ function log(line: string) {
   console.log(`[ppmcp-bridge] ${new Date().toISOString()} ${line}`);
 }
 
-new Relay(PORT);
+const TOKEN = loadOrCreateRelayToken();
+mirrorToken(TOKEN);
+// The plugin may be installed/linked after the bridge starts; keep the copy fresh.
+setInterval(() => mirrorToken(TOKEN), 10000).unref();
+new Relay(PORT, TOKEN);
 
 process.on("SIGINT", () => process.exit(0));
 process.on("SIGTERM", () => process.exit(0));

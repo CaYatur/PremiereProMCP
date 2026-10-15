@@ -36,7 +36,21 @@ export interface HelloMessage {
   role: ClientRole;
   /** e.g. plugin version, Premiere version — useful for diagnostics. */
   info?: Record<string, unknown>;
+  /** Per-install shared secret (see token.ts). Required by the relay. */
+  token?: string;
 }
+
+/** relay -> client: handshake rejected (bad/missing token). The relay closes
+ * the socket with RELAY_AUTH_CLOSE_CODE right after sending this. */
+export interface AuthErrorMessage {
+  type: "authError";
+  message: string;
+}
+
+export const RELAY_AUTH_CLOSE_CODE = 4401;
+export const MAX_CALL_TIMEOUT_MS = 600000;
+export const MIN_CALL_TIMEOUT_MS = 1000;
+export const RELAY_MAX_PAYLOAD_BYTES = 64 * 1024 * 1024;
 
 /** MCP server -> relay -> plugin | legacy-bridge */
 export interface CallMessage {
@@ -81,7 +95,8 @@ export type RelayMessage =
   | CallMessage
   | ResultMessage
   | StatusQueryMessage
-  | StatusResultMessage;
+  | StatusResultMessage
+  | AuthErrorMessage;
 
 export function isCallMessage(m: RelayMessage): m is CallMessage {
   return m.type === "call";

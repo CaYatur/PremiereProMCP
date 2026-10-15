@@ -75,6 +75,12 @@ Without this app, a beginner cannot load the PPMCP panel into Premiere.
 ### 1. Bridge
 - Desktop shortcut: **PPMCP Bridge** (also Startup if you kept that option).  
 - If the panel is red: run that shortcut.
+- Security (automatic, nothing to do): the bridge only listens on
+  `127.0.0.1`, refuses connections from web pages, and requires a per-install
+  token. The token is created on first start at `%APPDATA%\PPMCP\relay-token`
+  and copied into the plugin folder; the panel and MCP server read it
+  themselves. If you ever see "relay token rejected", restart the bridge
+  shortcut — it re-shares the token.
 
 ### 2. Premiere Pro panel
 1. Open **Premiere Pro**.  
@@ -223,16 +229,16 @@ problem is in your client's config:
 
 #### Optional: choose how many tools the model sees
 
-PPMCP ships 277 tools. Registering all of them costs thousands of tokens per
+PPMCP ships 283 tools. Registering all of them costs thousands of tokens per
 session and makes tool selection worse, so the server **starts** on a profile.
-All 277 are loaded either way — the profile only decides how many are
+All 283 are loaded either way — the profile only decides how many are
 registered up front.
 
 | `PPMCP_PROFILE` | Registered at start | Use when |
 |-----------------|--------------------|----------|
 | `core` | 19 | Small/cheap models. `edit_bootstrap` → `edit_auto` → `edit_verify` only. |
-| `standard` *(default)* | 109 | Everything with a recorded live pass, plus the atomics a real cut uses. |
-| `full` | 277 | You want the entire catalog resident from the first turn, as in 1.0.x. |
+| `standard` *(default)* | 112 | Everything with a recorded live pass, plus the atomics a real cut uses. |
+| `full` | 283 | You want the entire catalog resident from the first turn, as in 1.0.x. |
 
 **You do not have to get this right.** The model can raise its own surface
 mid-session with `tool_profile({ profile: "full" })` (or `{ category: "color" }`

@@ -95,7 +95,7 @@ async function runDiagnostics() {
 // falls back to the per-user Creative Cloud Libraries copy.
 const BASIC_TITLE_MOGRT_CANDIDATES = [
   'C:\\Program Files\\Adobe\\Adobe Premiere Pro 2026\\Essential Graphics\\Basic Title.mogrt',
-  'C:\\Users\\cagan\\AppData\\Roaming\\Adobe\\Common\\Motion Graphics Templates\\Basic Title.mogrt',
+  require('os').homedir() + '\\AppData\\Roaming\\Adobe\\Common\\Motion Graphics Templates\\Basic Title.mogrt',
 ];
 
 // WRITE test: creates a throwaway sequence (does not touch any existing

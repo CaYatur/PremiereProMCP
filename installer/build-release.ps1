@@ -91,6 +91,9 @@ foreach ($d in @(
   )) {
   Copy-Path $d
 }
+# Never ship a developer's per-install relay token; each install's bridge
+# generates its own on first start.
+Remove-Item (Join-Path $App "plugin\relay-token.txt") -Force -ErrorAction SilentlyContinue
 Copy-Item (Join-Path $RepoRoot "package.json") (Join-Path $App "package.json") -Force
 if (Test-Path (Join-Path $RepoRoot "package-lock.json")) {
   Copy-Item (Join-Path $RepoRoot "package-lock.json") (Join-Path $App "package-lock.json") -Force
@@ -167,6 +170,29 @@ if (-not $SkipNodeDownload) {
       if (Test-Path $partPath) { Remove-Item $partPath -Force }
     }
   }
+
+  # Verify the archive against nodejs.org's published SHASUMS256.txt
+  # (covers both fresh downloads and the cached zip).
+  $prevProgress = $ProgressPreference
+  $ProgressPreference = 'SilentlyContinue'
+  try {
+    $sums = (Invoke-WebRequest -Uri "https://nodejs.org/dist/v$NodeVersion/SHASUMS256.txt" -UseBasicParsing).Content
+  } finally {
+    $ProgressPreference = $prevProgress
+  }
+  if ($sums -is [byte[]]) { $sums = [System.Text.Encoding]::ASCII.GetString($sums) }
+  $expected = $null
+  foreach ($line in ($sums -split "`n")) {
+    $parts = $line.Trim() -split '\s+'
+    if ($parts.Count -eq 2 -and $parts[1] -eq $zipName) { $expected = $parts[0].ToLower() }
+  }
+  if (-not $expected) { throw "No SHA-256 entry for $zipName in SHASUMS256.txt" }
+  $actual = (Get-FileHash -Algorithm SHA256 -Path $zipPath).Hash.ToLower()
+  if ($actual -ne $expected) {
+    Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+    throw "SHA-256 mismatch for $zipName (expected $expected, got $actual)"
+  }
+  Write-Ok "SHA-256 verified ($zipName)"
 
   $extract = Join-Path $env:TEMP "node-v$NodeVersion-win-x64"
   if (Test-Path $extract) { Remove-Item $extract -Recurse -Force }

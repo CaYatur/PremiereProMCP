@@ -17,6 +17,8 @@ import {
   ErrorCode,
   DEFAULT_RELAY_PORT,
   DEFAULT_CALL_TIMEOUT_MS,
+  RELAY_AUTH_CLOSE_CODE,
+  loadOrCreateRelayToken,
 } from "@ppmcp/shared";
 import { beforeRelayCall, endRelayCall } from "./rateLimit.js";
 
@@ -42,6 +44,7 @@ export class RelayClient {
   private waiters = new Map<string, Waiter>();
   private statusWaiters = new Map<string, (r: StatusResultMessage) => void>();
   private connecting = false;
+  private lastAuthError: string | null = null;
   private attemptedSpawn = false;
   private connectedResolve: (() => void) | null = null;
   private connectedPromise: Promise<void> | null = null;
@@ -59,7 +62,14 @@ export class RelayClient {
     ws.on("open", () => {
       this.connecting = false;
       this.attemptedSpawn = false;
-      const hello: HelloMessage = { type: "hello", role: "mcp-server" };
+      let token: string | undefined;
+      try {
+        // Re-read every connect: picks up a token created by a (re)started bridge.
+        token = loadOrCreateRelayToken();
+      } catch (err) {
+        console.error(`[ppmcp-server] could not read relay token: ${String(err)}`);
+      }
+      const hello: HelloMessage = { type: "hello", role: "mcp-server", token };
       ws.send(JSON.stringify(hello));
       console.error(`[ppmcp-server] connected to relay at ${this.url}`);
       const resolve = this.connectedResolve;
@@ -75,13 +85,21 @@ export class RelayClient {
       } catch {
         return;
       }
-      if (msg.type === "result") this.handleResult(msg);
+      if (msg.type === "authError") {
+        this.lastAuthError = msg.message;
+        console.error(`[ppmcp-server] ${msg.message}`);
+      } else if (msg.type === "result") this.handleResult(msg);
       else if (msg.type === "statusResult") this.handleStatusResult(msg);
     });
 
-    ws.on("close", () => {
+    ws.on("close", (code: number) => {
       this.connecting = false;
       this.ws = null;
+      if (code === RELAY_AUTH_CLOSE_CODE) {
+        this.failAllWaiters("PLUGIN_NOT_CONNECTED", this.lastAuthError ?? "Relay rejected the relay token.");
+      } else {
+        this.lastAuthError = null;
+      }
       this.failAllWaiters("TIMEOUT", "Lost connection to the bridge/relay process.");
       setTimeout(() => this.connect(), 1500);
     });
@@ -138,7 +156,7 @@ export class RelayClient {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         throw new RelayCallError({
           code: "PLUGIN_NOT_CONNECTED",
-          message: "Not connected to the bridge/relay process. Is it running?",
+          message: this.lastAuthError ?? "Not connected to the bridge/relay process. Is it running?",
         });
       }
       const id = randomUUID();

@@ -14,8 +14,8 @@ import { spawnSync } from "node:child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
-const VIDEO_DIR = "C:\\Users\\cagan\\Desktop\\editsource\\video2";
-const MUSIC = "C:\\Users\\cagan\\Desktop\\editsource\\music\\Eternal.mp3";
+const VIDEO_DIR = process.env.USERPROFILE + "\\Desktop\\editsource\\video2";
+const MUSIC = process.env.USERPROFILE + "\\Desktop\\editsource\\music\\Eternal.mp3";
 const TPS = 254016000000n;
 const sec = (s) => String(BigInt(Math.round(Number(s) * Number(TPS))));
 

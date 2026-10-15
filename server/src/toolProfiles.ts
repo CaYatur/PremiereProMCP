@@ -1,6 +1,6 @@
 // Tool-surface profiles.
 //
-// The full catalog is ~277 tools. Registering every schema in every session
+// The full catalog is ~283 tools. Registering every schema in every session
 // costs the client thousands of tokens before a single edit happens, and a
 // large flat surface measurably hurts tool selection. So the server registers
 // a *profile* by default and keeps the rest reachable through the `tool_*`

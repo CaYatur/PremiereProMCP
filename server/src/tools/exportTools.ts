@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { defineTool } from "../toolDefinition.js";
+import { callExportSequence } from "../exportPreset.js";
 
 export const exportTools = [
   defineTool({
@@ -10,12 +11,12 @@ export const exportTools = [
     inputSchema: {
       sequenceId: z.string().optional(),
       outputPath: z.string().describe("Absolute output media path."),
-      presetPath: z.string().optional().describe("Absolute path to a .epr preset."),
+      presetPath: z.string().optional().describe("Absolute path to a .epr preset. Omit to use the installed H.264 Match Source preset."),
       exportType: z.enum(["immediately", "queue"]).optional().default("immediately"),
       exportFull: z.boolean().optional().default(true),
     },
     handler: async (p, ctx) => {
-      const data = await ctx.relay.call("export.sequence", p);
+      const data = await callExportSequence(ctx, p);
       return { text: `Export to ${p.outputPath} (${p.exportType}).`, data };
     },
   }),
@@ -31,7 +32,7 @@ export const exportTools = [
       exportType: z.enum(["immediately", "queue"]).optional().default("immediately"),
     },
     handler: async (p, ctx) => {
-      const data = await ctx.relay.call("export.sequence", p);
+      const data = await callExportSequence(ctx, p);
       return { text: `Export with preset to ${p.outputPath}.`, data };
     },
   }),
@@ -46,7 +47,7 @@ export const exportTools = [
       presetPath: z.string().optional(),
     },
     handler: async (p, ctx) => {
-      const data = await ctx.relay.call("export.sequence", { ...p, exportType: "queue" });
+      const data = await callExportSequence(ctx, { ...p, exportType: "queue" });
       return { text: `Queued to Media Encoder: ${p.outputPath}.`, data };
     },
   }),
@@ -125,7 +126,7 @@ export const exportTools = [
         const safeName = (seq?.name || id).replace(/[<>:"/\\|?*]/g, "_");
         const outputPath = `${p.outputDir.replace(/[\\/]$/, "")}\\${safeName}${p.extension.startsWith(".") ? p.extension : `.${p.extension}`}`;
         try {
-          const data = await ctx.relay.call("export.sequence", {
+          const data = await callExportSequence(ctx, {
             sequenceId: id,
             outputPath,
             presetPath: p.presetPath,

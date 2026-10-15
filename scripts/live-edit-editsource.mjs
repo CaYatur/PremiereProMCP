@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Live edit using C:\Users\cagan\Desktop\editsource\_extracted assets.
+ * Live edit using %USERPROFILE%\Desktop\editsource\_extracted assets.
  * Requires: Premiere + UXP plugin + bridge :8265
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -11,7 +11,7 @@ import fs from "node:fs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
-const SRC = "C:\\Users\\cagan\\Desktop\\editsource\\_extracted";
+const SRC = process.env.USERPROFILE + "\\Desktop\\editsource\\_extracted";
 
 const videos = [
   path.join(SRC, "clip_backrooms_12s.mp4"),
@@ -86,7 +86,7 @@ await call("analyze_media_capabilities", {});
 
 // Onset analysis on long whoosh library (original long file)
 const longWhoosh =
-  "C:\\Users\\cagan\\Desktop\\editsource\\audio\\20 CINEMATIC WHOOSH Sound Effects (No Copyright).mp3";
+  process.env.USERPROFILE + "\\Desktop\\editsource\\audio\\20 CINEMATIC WHOOSH Sound Effects (No Copyright).mp3";
 await call("analyze_detect_onsets", {
   mediaPath: longWhoosh,
   maxEvents: 15,

@@ -14,3 +14,16 @@
 8. Optional smoke test from repo root: `node scripts/smoke-test.mjs`
 
 For full Windows install: [`INSTALL.md`](../INSTALL.md) / `installer\install.bat`.
+
+## Permissions (manifest.json)
+
+- `network.domains: "all"` — kept because UXP host-domain matching for a
+  loopback `ws://` URL with a port is not reliably documented; narrowing it
+  risks the panel failing to connect. The panel only ever opens
+  `ws://127.0.0.1:8265`, and the bridge itself rejects web origins and
+  unauthenticated clients.
+- `localFileSystem: "fullAccess"` — needed to probe AE MOGRT templates under
+  `%APPDATA%` / Program Files (`getEntryWithUrl`) and as a fallback for
+  reading the relay token from `%APPDATA%\PPMCP\relay-token`.
+- `relay-token.txt` in this folder is written by the bridge and is
+  per-install; it is git-ignored and never shipped.

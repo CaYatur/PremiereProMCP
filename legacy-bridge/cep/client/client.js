@@ -131,6 +131,20 @@
     });
   }
 
+  // Per-install relay token, created automatically by the PPMCP bridge.
+  function readRelayToken() {
+    try {
+      var nodeRequire = window.cep_node ? window.cep_node.require : (typeof require === "function" ? require : null);
+      if (!nodeRequire) return undefined;
+      var fs = nodeRequire("fs");
+      var path = nodeRequire("path");
+      var base = (typeof process !== "undefined" && process.env && process.env.APPDATA) || path.join(nodeRequire("os").homedir(), "AppData", "Roaming");
+      return String(fs.readFileSync(path.join(base, "PPMCP", "relay-token"), "utf8")).trim() || undefined;
+    } catch (e) {
+      return undefined;
+    }
+  }
+
   function connect() {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
     setStatus("Connecting to relay…", "warn");
@@ -147,6 +161,7 @@
           type: "hello",
           role: "legacy-bridge",
           info: { name: "ppmcp-legacy-cep", version: "0.1.1" },
+          token: readRelayToken(),
         }),
       );
       setStatus("Connected — text bridge ready", "ok");

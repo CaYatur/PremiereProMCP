@@ -108,6 +108,52 @@ async function optionalPostPlace(
   return did ? out : undefined;
 }
 
+/** Pick the clip placed at atTicks (PNG/overwrite paths don't report clipIndex). */
+export function findClipAt(
+  clips: Array<{ clipIndex: number; startTicks?: string }>,
+  atTicks: string,
+  hint?: number,
+): number | undefined {
+  const at = BigInt(atTicks);
+  let best: { idx: number; d: bigint } | undefined;
+  for (const c of clips) {
+    if (c.startTicks === undefined || c.startTicks === "") continue;
+    const s = BigInt(c.startTicks);
+    const d = s > at ? s - at : at - s;
+    if (!best || d < best.d) best = { idx: c.clipIndex, d };
+  }
+  if (best && best.d <= 254016000000n / 2n) return best.idx;
+  return hint;
+}
+
+async function applyTextDuration(
+  ctx: { relay: { call: (m: string, p: Record<string, unknown>, t?: number) => Promise<unknown> } },
+  opts: { sequenceId?: string; trackIndex: number; clipIndexHint?: number; atTicks: string; durationTicks: string },
+): Promise<Record<string, unknown>> {
+  try {
+    const clips = (await ctx.relay.call("clip.list", {
+      sequenceId: opts.sequenceId,
+      trackType: "video",
+      trackIndex: opts.trackIndex,
+    })) as Array<{ clipIndex: number; startTicks?: string; durationTicks?: string }>;
+    const clipIndex = findClipAt(clips || [], opts.atTicks, opts.clipIndexHint);
+    if (clipIndex === undefined) return { applied: false, error: "placed text clip not found on track" };
+    const start = clips.find((c) => c.clipIndex === clipIndex)?.startTicks ?? opts.atTicks;
+    const end = String(BigInt(start) + BigInt(opts.durationTicks));
+    const trim = await ctx.relay.call("clip.trim", {
+      sequenceId: opts.sequenceId,
+      trackType: "video",
+      trackIndex: opts.trackIndex,
+      clipIndex,
+      edge: "out",
+      newTicks: end,
+    });
+    return { applied: true, clipIndex, endTicks: end, trim };
+  } catch (e) {
+    return { applied: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 export const titleTools = [
   defineTool({
     name: "text_system_status",
@@ -629,7 +675,7 @@ export const titleTools = [
       sequenceId: z.string().optional(),
       trackIndex: z.number().int(),
       atTicks: ticks,
-      durationTicks: ticks.optional().describe("Optional out-trim when editable path succeeds."),
+      durationTicks: ticks.optional().describe("On-screen duration (applied on every path, including PNG)."),
       text: z.string(),
       style: z
         .enum(["title", "lower_third", "caption"])
@@ -649,15 +695,17 @@ export const titleTools = [
         colorHex: p.colorHex,
         verify: true,
       });
-      if (r.ok && r.editable && p.durationTicks) {
+      let durationApplied: Record<string, unknown> | undefined;
+      if (r.ok && p.durationTicks) {
+        // Every path (editable and PNG) honors durationTicks: find the clip
+        // that starts at atTicks on the target track and move its end.
         const trackIndex = (r.data.trackIndex as number) ?? p.trackIndex;
-        const clipIndex = (r.data.clipIndex as number) ?? 0;
-        await optionalPostPlace(ctx, {
+        durationApplied = await applyTextDuration(ctx, {
           sequenceId: p.sequenceId,
           trackIndex,
-          clipIndex,
-          durationTicks: p.durationTicks,
+          clipIndexHint: r.data.clipIndex as number | undefined,
           atTicks: p.atTicks,
+          durationTicks: p.durationTicks,
         });
       }
       return {
@@ -669,6 +717,7 @@ export const titleTools = [
           via: r.via,
           pathAttempts: r.pathAttempts,
           recovery: r.recovery,
+          ...(durationApplied ? { duration: durationApplied } : {}),
         },
       };
     },

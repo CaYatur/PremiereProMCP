@@ -199,7 +199,7 @@ UXP Plugin (inside Premiere Pro)
 | Requirement | Notes |
 |-------------|--------|
 | **Windows** | Primary tested platform |
-| **Adobe Premiere Pro** | UXP-capable (e.g. 25 / 26+) |
+| **Adobe Premiere Pro** | 26.0 or newer (UXP; plugin manifest `minVersion` 26.0.0) |
 | **UXP Developer Tool** | Required to load the panel ([download](https://developer.adobe.com/premiere-pro/uxp/)) |
 | **MCP client** | Claude Desktop, Cursor, Claude Code, etc. |
 | **Node.js 18+** | Only if you install from source (EXE includes portable Node) |
