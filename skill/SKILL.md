@@ -217,8 +217,8 @@ Stored under `~/.ppmcp/checkpoints/`. Call **before** mass edits.
 
 ## Your tool list is a starting point — you can extend it yourself
 
-All 277 tools are loaded. The session *registers* a profile (default
-`standard` = 109) only to keep your tool list small. **A tool you cannot see
+All 283 tools are loaded. The session *registers* a profile (default
+`standard` = 112) only to keep your tool list small. **A tool you cannot see
 is not missing, and you do not need the user's permission to get it.**
 
 **One-off call** — cheapest, works regardless of client:
@@ -235,7 +235,7 @@ the job is complex and varied enough that you want everything visible:
 ```
 tool_profile { category: "color" }    // register one area, additive
 tool_profile { enable: ["clip_reverse", "media_relink"] }  // specific tools
-tool_profile { profile: "full" }      // register all 277 — take it if you want it
+tool_profile { profile: "full" }      // register all 283 — take it if you want it
 tool_profile { }                      // just report the current state
 ```
 
@@ -254,8 +254,8 @@ pinned earlier).
 `tool_search`.** `tool_search`, `tool_schema` and `tool_profile` are exempt
 from the rate limiter, so orienting yourself costs no waiting.
 
-Operator-side: `PPMCP_PROFILE=core` (19) / `standard` (109, default) /
-`full` (277) sets only where the session *starts*.
+Operator-side: `PPMCP_PROFILE=core` (19) / `standard` (112, default) /
+`full` (283) sets only where the session *starts*.
 
 ## Token hygiene
 

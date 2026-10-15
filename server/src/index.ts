@@ -22,7 +22,7 @@ const server = new McpServer({
 
 const ctx: ToolContext = { relay };
 
-// Registering all ~277 schemas costs the client thousands of tokens per
+// Registering all ~283 schemas costs the client thousands of tokens per
 // session and measurably hurts tool selection, so a session starts on a
 // profile. But every tool is *registered* with the SDK up front and the ones
 // outside the profile are merely disabled — that is what lets `tool_profile`
@@ -60,7 +60,7 @@ const surface: SurfaceControl = {
     let count = 0;
     for (const [name, handle] of handles) {
       // Written directly rather than via enable()/disable(), which would emit
-      // one tools/list_changed per tool — up to 277 notifications for a single
+      // one tools/list_changed per tool — up to 283 notifications for a single
       // switch. `enabled` is part of the SDK's public RegisteredTool type.
       handle.enabled = shouldBeEnabled(name);
       if (handle.enabled) count += 1;
