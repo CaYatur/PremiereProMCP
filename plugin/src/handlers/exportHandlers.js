@@ -281,6 +281,9 @@ module.exports = {
   "export.sequence": async ({ sequenceId, outputPath, presetPath, exportType, exportFull }) => {
     const project = await getActiveProject();
     const sequence = await getSequence(project, sequenceId);
+    if (!presetPath) {
+      throw new Error("export.sequence: presetPath is required (the server fills in a default .epr; update the PPMCP server if you see this).");
+    }
     try {
       const em = getEncoderManager();
       const type = resolveExportType(exportType);

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { defineTool } from "../toolDefinition.js";
+import { callExportSequence } from "../exportPreset.js";
 import { detectSilenceInFile, findFfmpeg, secondsToTicks, transcribeMedia } from "../mediaAnalysis.js";
 import { placeText } from "../textEngine.js";
 import type { RelayClient } from "../relayClient.js";
@@ -279,7 +280,7 @@ export const workflowTools = [
       for (const clip of p.audioClips ?? []) {
         await ctx.relay.call("audio.normalize", { sequenceId: p.sequenceId, trackType: "audio", trackIndex: clip.trackIndex, clipIndex: clip.clipIndex, targetDb: p.targetDb ?? 0 });
       }
-      const data = await ctx.relay.call("export.sequence", { sequenceId: p.sequenceId, outputPath: p.outputPath, presetPath: p.presetPath });
+      const data = await callExportSequence(ctx, { sequenceId: p.sequenceId, outputPath: p.outputPath, presetPath: p.presetPath });
       return { text: `Normalized ${p.audioClips?.length ?? 0} clip(s) and started export to ${p.outputPath}.`, data };
     },
   }),
