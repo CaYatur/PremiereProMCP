@@ -91,6 +91,9 @@ foreach ($d in @(
   )) {
   Copy-Path $d
 }
+# Never ship a developer's per-install relay token; each install's bridge
+# generates its own on first start.
+Remove-Item (Join-Path $App "plugin\relay-token.txt") -Force -ErrorAction SilentlyContinue
 Copy-Item (Join-Path $RepoRoot "package.json") (Join-Path $App "package.json") -Force
 if (Test-Path (Join-Path $RepoRoot "package-lock.json")) {
   Copy-Item (Join-Path $RepoRoot "package-lock.json") (Join-Path $App "package-lock.json") -Force

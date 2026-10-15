@@ -3,6 +3,33 @@ const handlers = require("./handlers/index.js");
 const ppro = require("premierepro");
 
 const RECONNECT_DELAY_MS = 1500;
+const TOKEN_FILENAME = "relay-token.txt";
+
+// The bridge creates a per-install token and copies it into this plugin's
+// folder automatically. Re-read on every (re)connect so a bridge restart or a
+// freshly created token is picked up without reloading the panel.
+async function readRelayToken() {
+  const lfs = require("uxp").storage.localFileSystem;
+  try {
+    const folder = await lfs.getPluginFolder();
+    const entry = await folder.getEntry(TOKEN_FILENAME);
+    const t = String(await entry.read()).trim();
+    if (t) return t;
+  } catch {
+    /* fall through to %APPDATA%\PPMCP\relay-token */
+  }
+  try {
+    const os = require("os");
+    const home = os.homedir();
+    const url = "file:" + (home + "\\AppData\\Roaming\\PPMCP\\relay-token").replace(/\\/g, "/");
+    const entry = await lfs.getEntryWithUrl(url);
+    const t = String(await entry.read()).trim();
+    if (t) return t;
+  } catch {
+    /* no token available */
+  }
+  return undefined;
+}
 
 class RelayConnection {
   constructor(onStatusChange) {
@@ -39,7 +66,9 @@ class RelayConnection {
       } catch {
         info = { pluginVersion: "0.1.0" };
       }
-      ws.send(JSON.stringify({ type: "hello", role: "plugin", info }));
+      const token = await readRelayToken();
+      if (!token) console.log("[PPMCP] relay token not found yet (bridge creates it on start)");
+      ws.send(JSON.stringify({ type: "hello", role: "plugin", info, token }));
     });
 
     ws.addEventListener("message", async (event) => {
@@ -47,6 +76,11 @@ class RelayConnection {
       try {
         msg = JSON.parse(event.data);
       } catch {
+        return;
+      }
+      if (msg.type === "authError") {
+        console.log(`[PPMCP] ${msg.message}`);
+        this.authError = msg.message;
         return;
       }
       if (msg.type === "call") {
@@ -57,7 +91,11 @@ class RelayConnection {
     ws.addEventListener("close", (event) => {
       console.log(`[PPMCP] WebSocket close: code=${event && event.code} reason=${event && event.reason}`);
       this.connected = false;
-      this.onStatusChange(false, `closed (code ${event && event.code})`);
+      if (event && event.code === 4401) {
+        this.onStatusChange(false, "relay token rejected — retrying (restart the PPMCP bridge if this persists)");
+      } else {
+        this.onStatusChange(false, `closed (code ${event && event.code})`);
+      }
       this._scheduleReconnect();
     });
 
