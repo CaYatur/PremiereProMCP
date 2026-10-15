@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { WebSocket } from "ws";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -109,7 +109,7 @@ try {
   process.env.PPMCP_BRIDGE_PORT = String(port);
   process.env.PPMCP_TOKEN_FILE = tokenFile;
   process.env.PPMCP_NO_AUTOSPAWN = "1";
-  const { RelayClient } = await import(path.join(root, "server/dist/relayClient.js"));
+  const { RelayClient } = await import(pathToFileURL(path.join(root, "server/dist/relayClient.js")).href);
   const rc = new RelayClient(port);
   rc.connect();
   const s1 = await rc.getStatus();
